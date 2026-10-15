@@ -140,7 +140,7 @@ html, body {
 
 /* ---- what to do ---- */
 
-.actions { grid-area: actions; display: flex; flex-direction: column; gap: 18px; align-self: start; }
+.title > .actions { grid-area: actions; display: flex; flex-direction: column; gap: 18px; align-self: start; }
 
 .tile {
   display: block; width: 100%;
@@ -313,7 +313,7 @@ kbd {
 @media (min-width: 821px) and (max-height: 760px) {
   .wordmark { font-size: clamp(56px, 7vw, 84px); }
   #preview { height: clamp(180px, 36vh, 280px); }
-  .actions { gap: 14px; }
+  .title > .actions { gap: 14px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .wordmark span, #ranks { animation: none; }
@@ -374,6 +374,65 @@ kbd {
 #board .hearts { color: #ff4d6d; letter-spacing: -1px; }
 #board .out { font-size: 11px; opacity: 0.55; text-transform: uppercase; }
 #board .wins { font-size: 11px; font-weight: 700; color: #e8a400; -webkit-text-stroke: 0.4px var(--ink); }
+
+/* ==== emotes ==== */
+
+#bubbles { position: absolute; inset: 0; overflow: hidden; }
+.bubble {
+  position: absolute; left: 0; top: 0;
+  padding: 4px 12px 5px;
+  font: 700 18px var(--font);
+  white-space: nowrap;
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 3px 0 var(--ink);
+  animation: bubble 0.25s cubic-bezier(.2, 1.8, .4, 1);
+  transition: opacity 0.3s;
+}
+.bubble::after {
+  content: ""; position: absolute; left: 50%; bottom: -10px;
+  border: 7px solid transparent; border-top: 8px solid var(--ink);
+  transform: translateX(-50%);
+}
+.bubble.fade { opacity: 0; }
+@keyframes bubble { from { scale: 0.3; } }
+
+#emoteBtn {
+  position: absolute; left: 16px; bottom: 16px;
+  width: 48px; height: 48px;
+  pointer-events: auto;
+  font-size: 22px;
+  background: rgba(255, 250, 240, 0.95);
+  border: 3px solid var(--ink); border-radius: 50%;
+  box-shadow: 0 4px 0 var(--ink);
+  cursor: pointer;
+}
+#emoteBtn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
+#emotePicker {
+  position: absolute; left: 16px; bottom: 76px;
+  display: grid; grid-template-columns: repeat(4, auto); gap: 6px;
+  pointer-events: auto;
+  padding: 8px;
+  background: rgba(255, 250, 240, 0.96);
+  border: 3px solid var(--ink); border-radius: 18px;
+  box-shadow: 0 4px 0 var(--ink);
+}
+#emotePicker button {
+  position: relative;
+  min-width: 56px; padding: 8px 10px;
+  font: 700 16px var(--font); color: var(--ink);
+  background: #fff;
+  border: 2px solid var(--ink); border-radius: 12px;
+  cursor: pointer;
+}
+#emotePicker button:active { transform: translateY(2px); }
+#emotePicker kbd { position: absolute; top: -8px; left: -6px; font-size: 10px; }
+body.touch #emotePicker kbd { display: none; }
+/* on phones the stick owns the left side, so emotes sit above the dash button */
+body.touch #emoteBtn { left: auto; right: 34px; bottom: 150px; width: 44px; height: 44px; font-size: 20px; }
+body.touch #emotePicker { left: auto; right: 14px; bottom: 204px; }
+body.podium #emoteBtn, body.podium #emotePicker { display: none; }
 
 /* ==== private room lobby ==== */
 

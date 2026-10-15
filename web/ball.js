@@ -145,7 +145,7 @@ export class BallPitch {
     scene.add(this.group);
 
     this.ball = new THREE.Group();
-    const mesh = new THREE.Mesh(ballGeometry(), new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: ramp, flatShading: true }));
+    const mesh = new THREE.Mesh(ballGeometry(), new THREE.MeshToonMaterial({ vertexColors: true, gradientMap: ramp }));
     mesh.castShadow = true;
     const outline = new THREE.Mesh(new THREE.SphereGeometry(BALL_R, 24, 16), OUTLINE);
     outline.scale.setScalar(1.07);
