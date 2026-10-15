@@ -338,12 +338,14 @@ export class World {
   }
 
   // Tiles follow the server radius: crack near the edge, drop once mostly outside, rebuild on a new round
-  updateIsland(radius, dt) {
+  // tiles is Hex Drop's per-tile state from the server (0 solid, 1 cracking, 2 gone), same order as this.tiles
+  updateIsland(radius, dt, tiles) {
     const t = this.t;
     let shore = 0;
-    for (const tl of this.tiles) {
+    for (const [i, tl] of this.tiles.entries()) {
       const m = tl.mesh;
-      const want = tl.d - 0.35 > radius ? 'down'
+      const want = tiles ? ['up', 'warn', 'down'][tiles.charCodeAt(i) - 48] ?? 'up'
+        : tl.d - 0.35 > radius ? 'down'
         : tl.d + 1.0 > radius && radius < this.max - 0.01 ? 'warn'
         : 'up';
 
@@ -373,7 +375,7 @@ export class World {
           break;
         case 'warn': {
           // wobble grows as the edge closes in so the next tile to fall is readable
-          const urgency = THREE.MathUtils.clamp(1 - (radius - tl.d + 0.35) / 1.35, 0, 1);
+          const urgency = tiles ? 0.9 : THREE.MathUtils.clamp(1 - (radius - tl.d + 0.35) / 1.35, 0, 1);
           const amp = 0.015 + urgency * 0.05;
           m.position.set(tl.x + Math.sin(t * 47 + tl.phase) * amp, Math.sin(t * 31 + tl.phase) * amp - urgency * 0.08, tl.z);
           break;
@@ -487,12 +489,12 @@ export class World {
     this.island.visible = on;
   }
 
-  update(dt, radius, camera) {
+  update(dt, radius, camera, tiles = null) {
     this.t += dt;
     this.sky.position.copy(camera.position);
     this.clouds.rotation.y += dt * 0.01;
     this.waterUniforms.uTime.value = this.t;
-    if (radius !== null && this.island.visible) this.updateIsland(radius, dt);
+    if (radius !== null && this.island.visible) this.updateIsland(radius, dt, tiles);
     this.waterUniforms.uShore.value = this.shore;
   }
 }

@@ -105,6 +105,9 @@ type Player struct {
 
 	EmoteAt    float64
 	think      float64
+	goalX      float64 // where a bot is walking to in Hex Drop
+	goalZ      float64
+	hasGoal    bool
 	botRelease float64
 }
 
@@ -155,6 +158,10 @@ type Game struct {
 	ball      Ball
 	teamGoals [3]int
 
+	tiles      []Tile
+	tileIndex  map[hexKey]int
+	tileGraceT float64
+
 	store *Store // ratings, public room only
 }
 
@@ -169,6 +176,7 @@ func NewGame(code string, cfg Config) *Game {
 		modes:   slices.Clone(allModes),
 		private: code != "",
 	}
+	g.tiles, g.tileIndex = buildTiles()
 	if g.private {
 		g.enterLobby()
 		g.events = nil
@@ -205,6 +213,8 @@ func (g *Game) startRound() {
 		g.startCoins()
 	case modeBall:
 		g.startBall()
+	case modeTiles:
+		g.startTiles()
 	}
 	for _, p := range g.players {
 		if p.Elim {
@@ -255,8 +265,8 @@ func (g *Game) arenaRadius() float64 {
 	case phaseLobby:
 		return arenaMax
 	}
-	// the goals sit on the edge, so a ball pitch never crumbles
-	if g.mode == modeBall {
+	// the pitch has walls, and in Hex Drop the floor goes tile by tile instead
+	if g.mode == modeBall || g.mode == modeTiles {
 		return arenaMax
 	}
 	elapsed := g.cfg.RoundTime - g.phaseT
@@ -271,10 +281,16 @@ func (g *Game) respawn(p *Player) {
 	r := g.arenaRadius()
 	best, bestDist := [2]float64{}, -1.0
 	// pick the candidate spot farthest from everyone so nobody spawns inside a fight
-	for range 12 {
+	for range 24 {
 		a := rand.Float64() * math.Pi * 2
 		d := math.Sqrt(rand.Float64()) * r * 0.6
 		x, z := math.Sin(a)*d, math.Cos(a)*d
+		// in Hex Drop only an untouched tile is a fair place to land
+		if g.mode == modeTiles && g.phase == phasePlay {
+			if i := g.tileAt(x, z); i < 0 || g.tiles[i].State != tileSolid {
+				continue
+			}
+		}
 		nearest := math.Inf(1)
 		for _, o := range g.players {
 			if o == p || o.Falling {
@@ -360,11 +376,12 @@ func (g *Game) step(dt float64) {
 	g.updateHill(dt)
 	g.updateCoins(dt)
 	g.updateBall(dt)
+	g.updateTiles(dt)
 
 	for _, p := range g.players {
 		// jumps and ground pounds are airborne, so leaving the island only counts once they land
-		// the pitch has walls, so nobody leaves it
-		if g.mode != modeBall && !p.Falling && p.PoundT == 0 && !p.Airborne && math.Hypot(p.X, p.Z) > g.radius {
+		// the pitch has walls, and in Hex Drop the tiles decide who falls
+		if g.mode != modeBall && g.mode != modeTiles && !p.Falling && p.PoundT == 0 && !p.Airborne && math.Hypot(p.X, p.Z) > g.radius {
 			g.knockOut(p)
 		}
 	}
@@ -372,7 +389,7 @@ func (g *Game) step(dt float64) {
 	for _, p := range g.players {
 		p.AckTicks++
 	}
-	if g.phase == phasePlay && g.mode == modeLast && g.lastStandingDone() {
+	if g.phase == phasePlay && (g.mode == modeLast || g.mode == modeTiles) && g.lastStandingDone() {
 		g.endRound()
 	}
 }
@@ -431,6 +448,9 @@ func (g *Game) collide() {
 			if a.Pow == powBounce {
 				kb *= bounceKick
 			}
+			if g.mode == modeTiles && g.phase == phasePlay {
+				ka, kb = ka*tileBumpScale, kb*tileBumpScale
+			}
 			a.shove(-nx*ka*ia, -nz*ka*ia)
 			b.shove(nx*kb*ib, nz*kb*ib)
 
@@ -469,7 +489,7 @@ func (g *Game) knockOut(p *Player) {
 
 func (g *Game) scoreKnockOut(victim, killer *Player, ev map[string]any) {
 	switch g.mode {
-	case modeLast:
+	case modeLast, modeTiles:
 		g.knockOutLast(victim)
 		return
 	case modeCoins:
@@ -543,6 +563,13 @@ func (g *Game) thinkBots(dt float64) {
 		}
 		b.think = 0.15 + rand.Float64()*0.2
 
+		// dashing at people would mostly launch a bot into a hole, so in Hex Drop they just keep moving
+		if g.mode == modeTiles && g.phase == phasePlay {
+			g.botTiles(b)
+			// the floor changes fast, so look again sooner
+			b.think = 0.08 + rand.Float64()*0.06
+			continue
+		}
 		if g.mode == modeBall && g.phase == phasePlay {
 			dx, dz, dash := g.botBallInput(b)
 			g.botSteer(b, dx, dz)
@@ -630,7 +657,7 @@ func (g *Game) newPlayer(name string, color, hat int, bot bool) *Player {
 	case g.knockout() && g.phase != phaseLobby:
 		// a knockout field is fixed once it starts, so latecomers watch until the next match
 		g.bench(p)
-	case g.phase == phasePlay && g.mode == modeLast:
+	case g.phase == phasePlay && (g.mode == modeLast || g.mode == modeTiles):
 		g.joinLast(p)
 	case g.phase == phasePlay && g.mode == modeBall:
 		g.joinBall(p)
@@ -870,6 +897,9 @@ func (g *Game) snapshot() []byte {
 	}
 	if g.mode == modeBall && g.phase == phasePlay {
 		msg["bl"] = g.ballState()
+	}
+	if g.mode == modeTiles && g.phase == phasePlay {
+		msg["hx"] = g.tileState()
 	}
 	if g.sweepOn {
 		msg["sw"] = [2]float64{r2(g.sweepA), r2(g.sweepHalf())}

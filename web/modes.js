@@ -33,6 +33,12 @@ export const MODES = {
     unit: (n) => `${n} goal${n === 1 ? '' : 's'}`,
     cell: (p) => `<span class="team" style="background:${TEAMS[p.team]?.color ?? '#ccc'}"></span>${p.score}`,
   },
+  5: {
+    name: 'Hex Drop',
+    rule: 'Tiles drop a moment after you step on them. Keep moving and be the last blob standing.',
+    unit: (n) => `${n} li${n === 1 ? 'fe' : 'ves'} left`,
+    cell: (p) => `<span class="hearts">${'♥'.repeat(p.score)}</span>`,
+  },
 };
 
 export const TEAMS = {

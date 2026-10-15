@@ -175,7 +175,7 @@ function onSnapshot(m) {
     players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0, wins: a[10] ?? 0, team: a[11] ?? 0 });
   }
   const t = m.now * 1000 + clockOffset;
-  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, fm: m.fm ?? 0, kq: m.kq ?? 0, fin: !!m.fin, hl: m.hl, co: m.co, bl: m.bl, pt: !!m.pt };
+  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, fm: m.fm ?? 0, kq: m.kq ?? 0, fin: !!m.fin, hl: m.hl, co: m.co, bl: m.bl, pt: !!m.pt, hx: m.hx };
   snaps.push(snap);
   if (snaps.length > 60) snaps.shift();
   const phaseChanged = latest?.ph !== snap.ph;
@@ -226,7 +226,7 @@ function sample(rt) {
   if (a.bl && b.bl && !a.bl[3] && !b.bl[3] && Math.hypot(b.bl[0] - a.bl[0], b.bl[1] - a.bl[1]) < 4) {
     bl = [a.bl[0] + (b.bl[0] - a.bl[0]) * k, a.bl[1] + (b.bl[1] - a.bl[1]) * k, a.bl[2] + (b.bl[2] - a.bl[2]) * k, 0, b.bl[4], b.bl[5]];
   }
-  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw, sw, hl: b.hl, co: b.co, bl, pt: b.pt };
+  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw, sw, hl: b.hl, co: b.co, bl, pt: b.pt, hx: b.hx };
 }
 
 // ==== events ====
@@ -977,7 +977,7 @@ function frame(now) {
     }
   }
 
-  world.update(dt, view?.r ?? null, camera);
+  world.update(dt, view?.r ?? null, camera, view?.hx ?? null);
   crates.sync(view?.crates ?? [], dt, t);
   sweeper.update(view?.sw, dt);
   hillRing.update(view?.hl, dt, t, (id) => roster.get(id)?.c ?? 0);
