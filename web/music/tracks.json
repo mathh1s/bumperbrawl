@@ -2,12 +2,12 @@
   "menu": {
     "file": "music/menu.mp3",
     "loopStart": 0.5,
-    "loopEnd": 40.5
+    "loopEnd": 34.785714285714285
   },
   "battle": {
     "file": "music/battle.mp3",
     "loopStart": 0.5,
-    "loopEnd": 58.68181405895692
+    "loopEnd": 56.1521768707483
   },
   "final": {
     "file": "music/final.mp3",
