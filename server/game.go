@@ -49,7 +49,7 @@ const (
 	flagCharge = 8
 )
 
-var botNames = []string{"Bonk", "Wobbles", "Sir Bump", "Jellybean", "Puddin", "Mochi", "Gloop", "Tofu"}
+var botNames = []string{"Bonk", "Creamy", "Wobbles", "Sir Bump", "Jellybean", "Puddin", "Mochi", "Gloop", "Tofu", "Goofball", "Xx_OP_GAMER_xX", "iluvtsgame", "urmom", "nadamagafagabagerrager"}
 
 type Player struct {
 	ID    int
