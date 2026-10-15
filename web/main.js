@@ -159,7 +159,7 @@ function onSnapshot(m) {
     players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0, wins: a[10] ?? 0 });
   }
   const t = m.now * 1000 + clockOffset;
-  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, hl: m.hl, co: m.co };
+  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, fm: m.fm ?? 0, kq: m.kq ?? 0, fin: !!m.fin, hl: m.hl, co: m.co };
   snaps.push(snap);
   if (snaps.length > 60) snaps.shift();
   latest = snap;
@@ -325,7 +325,7 @@ function fireEvents(rt, view) {
         document.body.classList.remove('standings');
         const mode = modeOf(e.m);
         if (joined) {
-          banner(`<small>Round ${e.r} of ${e.of}</small>${mode.name}<small>${mode.rule}</small>`, 3200);
+          banner(`<small>${roundLabel(e)}</small>${mode.name}<small>${mode.rule}</small>`, 3200);
           sfx.start();
         }
         break;
@@ -335,8 +335,22 @@ function fireEvents(rt, view) {
         if (!joined) break;
         const mode = modeOf(e.m);
         let text;
-        if (e.mo) {
+        if (e.mo && e.fm === KNOCKOUT) {
+          text = e.ch ? `${esc(e.ch)} ${verb(e.ch)} the show!<small>last blob standing in the final</small>` : 'Show over!<small>nobody survived the final</small>';
+        } else if (e.mo) {
           text = e.ch ? `${esc(e.ch)} ${verb(e.ch)} the match!<small>most rounds won</small>` : 'Match over!<small>nobody won a round</small>';
+        } else if (e.fm === KNOCKOUT) {
+          // qualifying rounds are about who goes through, so that is all the banner says
+          addFeed(`${e.q.length} qualified, ${e.x.length} eliminated`);
+          if (e.q.includes(myId)) {
+            banner('Qualified!<small>on to the next round</small>', 3500);
+            sfx.crown();
+          } else if (e.x.includes(myId)) {
+            banner('Eliminated!<small>stick around and watch the rest</small>', 3500);
+            sfx.out();
+          }
+          showStandings(e.st ?? [], false);
+          break;
         } else {
           text = e.w ? `${esc(e.w)} ${verb(e.w)} round ${e.r}!<small>${mode.unit(e.s)}</small>` : `Round ${e.r} over!<small>nobody scored</small>`;
         }
@@ -385,6 +399,13 @@ function addFeed(html) {
 }
 
 let lastEnd = null;
+
+const KNOCKOUT = 1;
+
+function roundLabel({ r, of, fm, kq, fin }) {
+  if (fm !== KNOCKOUT) return `Round ${r} of ${of}`;
+  return fin ? 'The final' : `Round ${r} · top ${kq} go through`;
+}
 
 // the server joins co-winners with an ampersand
 const verb = (who) => (who.includes(' & ') ? 'win' : 'wins');
@@ -437,8 +458,8 @@ function updateHud(dt, view) {
   $('time').textContent = `${Math.floor(tl / 60)}:${String(tl % 60).padStart(2, '0')}`;
   const crumbling = latest.ph === 0 && view && view.r < ARENA_MAX - 0.01;
   $('phase').textContent = latest.ph === 1
-    ? (lastEnd?.mo ? 'New match in' : 'Next round')
-    : `Round ${latest.rn}/${latest.rm} · ${modeOf(latest.md).name}`;
+    ? (lastEnd?.mo ? (ROOM ? 'Lobby in' : 'New match in') : 'Next round')
+    : `${roundLabel({ r: latest.rn, of: latest.rm, fm: latest.fm, kq: latest.kq, fin: latest.fin })} · ${modeOf(latest.md).name}`;
   $('timer').classList.toggle('crumble', !!crumbling);
 
   const rows = [...latest.players.entries()]
@@ -452,7 +473,7 @@ function updateHud(dt, view) {
     const wins = p.wins ? `<span class="wins">★${p.wins}</span>` : '';
     return `<li class="${id === myId ? 'me' : ''}"><span class="dot" style="background:${PALETTE[r.c]}"></span>`
       + `<span class="nm">${esc(r.n)}</span>${crown}${r.b ? '<span class="bot">bot</span>' : ''}${wins}`
-      + `<span class="sc">${modeOf(latest.md).cell(p)}</span></li>`;
+      + `<span class="sc">${p.flags & OUT ? '<span class="out">out</span>' : modeOf(latest.md).cell(p)}</span></li>`;
   }).join('');
 }
 

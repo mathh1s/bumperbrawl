@@ -6,8 +6,14 @@ import { esc } from './text.js';
 // The host edits the settings; everyone else sees them read-only.
 
 const MODE_IDS = [0, 1, 2, 3];
+const KNOCKOUT = 1;
+const FORMATS = [
+  { id: 0, name: 'Points', blurb: 'Most round wins takes the match' },
+  { id: KNOCKOUT, name: 'Knockout', blurb: 'The best 60% go through each round, the last few play a final' },
+];
 const STEPPERS = [
-  { key: 'r', label: 'Rounds', min: 1, max: 10, step: 1, show: (v) => String(v) },
+  // a knockout runs until the final, so it has no round count
+  { key: 'r', label: 'Rounds', min: 1, max: 10, step: 1, show: (v) => String(v), hide: (set) => set.f === KNOCKOUT },
   { key: 't', label: 'Round length', min: 60, max: 240, step: 30, show: (v) => `${Math.floor(v / 60)}:${String(v % 60).padStart(2, '0')}` },
   { key: 'b', label: 'Bots fill to', min: 0, max: 8, step: 1, show: (v) => (v ? `${v} players` : 'no bots') },
 ];
@@ -34,6 +40,7 @@ export class LobbyPanel {
       if (act === 'ready') this.send({ t: 'ready', v: !this.meReady });
       if (act === 'start') this.send({ t: 'start' });
       if (act === 'step') this.change({ [key]: this.state.set[key] + Number(dir) * STEPPERS.find((s) => s.key === key).step });
+      if (act === 'format') this.change({ f: Number(btn.dataset.format) });
       if (act === 'mode') {
         const m = [...this.state.set.m];
         m[Number(mode)] = !m[Number(mode)];
@@ -72,7 +79,7 @@ export class LobbyPanel {
           + `<span class="nm">${esc(p.n)}</span>${p.i === room.host ? CROWN : ''}${tag}</li>`;
       }).join('');
 
-    const steppers = STEPPERS.map((s) => {
+    const steppers = STEPPERS.filter((s) => !s.hide?.(room.set)).map((s) => {
       const v = room.set[s.key];
       const ctl = isHost
         ? `<button data-act="step" data-key="${s.key}" data-dir="-1" ${v <= s.min ? 'disabled' : ''} aria-label="less">−</button>`
@@ -81,6 +88,8 @@ export class LobbyPanel {
         : `<b>${s.show(v)}</b>`;
       return `<div class="row"><span>${s.label}</span><span class="ctl">${ctl}</span></div>`;
     }).join('');
+    const format = FORMATS.find((f) => f.id === room.set.f) ?? FORMATS[0];
+    const formats = FORMATS.map((f) => `<button data-act="format" data-format="${f.id}" aria-pressed="${f.id === format.id}" ${isHost ? '' : 'disabled'}>${f.name}</button>`).join('');
     const modes = MODE_IDS.map((id) => {
       const on = !!room.set.m[id];
       return `<button data-act="mode" data-mode="${id}" aria-pressed="${on}" ${isHost ? '' : 'disabled'}>${MODES[id].name}</button>`;
@@ -100,7 +109,8 @@ export class LobbyPanel {
         <button class="fold" data-act="collapse" aria-label="Fold">${this.collapsed ? '▾' : '▴'}</button></header>
       <div class="body">
         <ul class="players">${players}</ul>
-        <div class="settings">${steppers}<div class="modes">${modes}</div>
+        <div class="settings"><div class="modes format">${formats}</div><p class="note">${format.blurb}</p>
+          ${steppers}<div class="modes">${modes}</div>
           ${isHost ? '' : '<p class="note">The host picks the settings</p>'}</div>
       </div>
       <p class="status">${status}</p>

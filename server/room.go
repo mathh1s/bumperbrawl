@@ -22,6 +22,7 @@ type RoomSettings struct {
 	Modes  []bool `json:"m"` // indexed by mode id
 	Fill   int    `json:"b"` // bots top the room up to this many players
 	Time   int    `json:"t"` // round length in seconds
+	Format int    `json:"f"` // formatPoints or formatKnockout
 }
 
 func (g *Game) settings() RoomSettings {
@@ -29,13 +30,17 @@ func (g *Game) settings() RoomSettings {
 	for _, m := range g.modes {
 		modes[m] = true
 	}
-	return RoomSettings{Rounds: g.cfg.MatchRounds, Modes: modes, Fill: g.cfg.MinPlayers, Time: int(g.cfg.RoundTime)}
+	return RoomSettings{Rounds: g.cfg.MatchRounds, Modes: modes, Fill: g.cfg.MinPlayers, Time: int(g.cfg.RoundTime), Format: g.format}
 }
 
 func (g *Game) applySettings(s RoomSettings) {
 	g.cfg.MatchRounds = min(maxRounds, max(minRounds, s.Rounds))
 	g.cfg.MinPlayers = min(maxBotFill, max(0, s.Fill))
 	g.cfg.RoundTime = float64(min(maxRoundSecs, max(minRoundSecs, s.Time)))
+	g.format = formatPoints
+	if s.Format == formatKnockout {
+		g.format = formatKnockout
+	}
 	var modes []int
 	for _, m := range allModes {
 		if m < len(s.Modes) && s.Modes[m] {
@@ -59,7 +64,7 @@ func (g *Game) enterLobby() {
 	g.resetSweeper()
 	g.crownID = 0
 	for _, p := range g.players {
-		p.Ready = false
+		p.Ready, p.Elim = false, false
 		p.Score, p.Lives, p.Out = 0, 0, false
 		g.respawn(p)
 	}

@@ -290,6 +290,9 @@ kbd {
 #lobby .modes button[aria-pressed="true"] { background: var(--gold); opacity: 1; box-shadow: 0 2px 0 var(--ink); }
 #lobby .modes button:disabled { cursor: default; }
 #lobby .note { margin: 6px 0 0; font-size: 12px; opacity: 0.6; text-align: center; }
+#lobby .format { margin: 0; }
+#lobby .format button { flex: 1; font-size: 13px; }
+#lobby .format + .note { margin: 4px 0 6px; }
 #lobby .status { margin: 8px 0 6px; text-align: center; font-size: 13px; }
 #lobby .status b { color: var(--accent); font-size: 18px; }
 #lobby .actions { display: flex; gap: 8px; }

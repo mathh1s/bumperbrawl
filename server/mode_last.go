@@ -26,7 +26,7 @@ func (g *Game) knockOutLast(victim *Player) {
 	victim.Lives = max(0, victim.Lives-1)
 	victim.Score = victim.Lives
 	if victim.Lives == 0 {
-		victim.Out = true
+		victim.Out, victim.OutAt = true, g.now
 		g.events = append(g.events, map[string]any{"k": "out", "i": victim.ID})
 	}
 }

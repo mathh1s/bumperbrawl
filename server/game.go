@@ -82,6 +82,8 @@ type Player struct {
 	PoundT     float64
 	Ghost      float64
 	Ready      bool
+	Elim       bool // knocked out of a knockout match
+	OutAt      float64
 	Stun       float64
 	Falling    bool
 	FallT      float64
@@ -139,6 +141,10 @@ type Game struct {
 	counting bool
 	forced   bool
 	modes    []int
+	format   int
+	final    bool
+	qualify  int
+	koDone   bool
 }
 
 func NewGame(code string, cfg Config) *Game {
@@ -166,7 +172,10 @@ func NewGame(code string, cfg Config) *Game {
 
 func (g *Game) startRound() {
 	g.roundNo++
-	g.mode = g.modeOrder[g.roundNo-1]
+	g.mode = g.modeOrder[(g.roundNo-1)%len(g.modeOrder)]
+	if g.knockout() {
+		g.startKnockoutRound()
+	}
 	g.phase = phasePlay
 	g.phaseT = g.cfg.RoundTime
 	g.radius = arenaMax
@@ -184,18 +193,30 @@ func (g *Game) startRound() {
 	case modeCoins:
 		g.startCoins()
 	}
-	g.events = append(g.events, map[string]any{"k": "start", "m": g.mode, "r": g.roundNo, "of": g.cfg.MatchRounds})
+	for _, p := range g.players {
+		if p.Elim {
+			g.bench(p)
+		}
+	}
+	g.events = append(g.events, map[string]any{
+		"k": "start", "m": g.mode, "r": g.roundNo, "of": g.cfg.MatchRounds, "fm": g.format, "kq": g.qualify, "fin": g.final,
+	})
 }
 
 func (g *Game) endRound() {
 	g.phase = phaseEnd
 	g.clearCrates()
 	top := g.podium()
-	winners := g.awardRound()
-	ev := map[string]any{
-		"k": "end", "m": g.mode, "r": g.roundNo, "of": g.cfg.MatchRounds,
-		"w": names(winners), "s": 0, "top": top, "st": g.standings(), "mo": g.matchOver(),
+	ev := map[string]any{"k": "end", "m": g.mode, "r": g.roundNo, "of": g.cfg.MatchRounds, "fm": g.format, "s": 0}
+	// knockout rounds before the final are about qualifying, not winning
+	var winners []*Player
+	if !g.knockout() || g.final {
+		winners = g.awardRound()
 	}
+	if g.knockout() {
+		g.endKnockoutRound(ev)
+	}
+	ev["w"], ev["top"], ev["st"], ev["mo"] = names(winners), top, g.standings(), g.matchOver()
 	if len(winners) > 0 {
 		ev["s"] = winners[0].Score
 	}
@@ -564,7 +585,11 @@ func (g *Game) newPlayer(name string, color, hat int, bot bool) *Player {
 	p := &Player{ID: g.nextID, Name: name, Color: color, Hat: hat, Bot: bot}
 	g.players[p.ID] = p
 	g.respawn(p)
-	if g.phase == phasePlay && g.mode == modeLast {
+	switch {
+	case g.knockout() && g.phase != phaseLobby:
+		// a knockout field is fixed once it starts, so latecomers watch until the next match
+		g.bench(p)
+	case g.phase == phasePlay && g.mode == modeLast:
 		g.joinLast(p)
 	}
 	return p
@@ -773,7 +798,7 @@ func (g *Game) snapshot() []byte {
 	msg := map[string]any{
 		"t": "s", "now": r2(g.now), "r": r2(g.radius),
 		"ph": g.phase, "tl": r2(math.Max(0, g.phaseT)), "p": ps, "c": g.crateList(), "cw": g.crownID,
-		"md": g.mode, "rn": g.roundNo, "rm": g.cfg.MatchRounds,
+		"md": g.mode, "rn": g.roundNo, "rm": g.cfg.MatchRounds, "fm": g.format, "kq": g.qualify, "fin": g.final,
 	}
 	if g.mode == modeHill && g.phase == phasePlay {
 		msg["hl"] = g.hillState()

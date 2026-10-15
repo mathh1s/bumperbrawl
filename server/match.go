@@ -37,11 +37,17 @@ func (g *Game) newMatch() {
 	}
 	g.modeOrder = g.modeOrder[:g.cfg.MatchRounds]
 	for _, p := range g.players {
-		p.Wins, p.MatchPts = 0, 0
+		p.Wins, p.MatchPts, p.Elim = 0, 0, false
 	}
+	g.final, g.qualify, g.koDone = false, 0, false
 }
 
-func (g *Game) matchOver() bool { return g.roundNo >= g.cfg.MatchRounds }
+func (g *Game) matchOver() bool {
+	if g.knockout() {
+		return g.koDone
+	}
+	return g.roundNo >= g.cfg.MatchRounds
+}
 
 // Every player tied on the best round score takes the round, as long as someone scored.
 func (g *Game) awardRound() []*Player {
@@ -51,6 +57,9 @@ func (g *Game) awardRound() []*Player {
 	}
 	var winners []*Player
 	for _, p := range g.players {
+		if p.Elim {
+			continue
+		}
 		p.MatchPts += p.Score
 		if best > 0 && p.Score == best {
 			p.Wins++
