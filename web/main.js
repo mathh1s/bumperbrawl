@@ -769,11 +769,13 @@ $('musicBtn').addEventListener('click', () => {
 });
 renderMusicButton();
 
+const ROUND_TRACKS = ['jam', 'wobble', 'gumball', 'sugar'];
+
 function pickTrack(view) {
   if (!joined || !view || view.ph !== 0) return 'menu';
   if (view.tl <= 30) return 'final';
-  // the two round themes take turns so a match doesn't loop one song
-  return (latest?.rn ?? 1) % 2 ? 'jam' : 'wobble';
+  // the round themes take turns so a match doesn't loop one song
+  return ROUND_TRACKS[((latest?.rn ?? 1) - 1) % ROUND_TRACKS.length];
 }
 
 // ==== rooms ====

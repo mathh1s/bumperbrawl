@@ -14,6 +14,16 @@
     "loopStart": 0.5,
     "loopEnd": 47.32927437641723
   },
+  "gumball": {
+    "file": "music/gumball.mp3",
+    "loopStart": 0.5,
+    "loopEnd": 64.5
+  },
+  "sugar": {
+    "file": "music/sugar.mp3",
+    "loopStart": 0.5,
+    "loopEnd": 64.5
+  },
   "final": {
     "file": "music/final.mp3",
     "loopStart": 0.5,

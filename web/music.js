@@ -27,7 +27,7 @@ export class Music {
   async load() {
     this.meta = await (await fetch('music/tracks.json')).json();
     // menu first so something plays quickly, the rest streams in behind it
-    for (const name of ['menu', 'jam', 'wobble', 'final', 'victory']) {
+    for (const name of ['menu', 'jam', 'wobble', 'gumball', 'sugar', 'final', 'victory']) {
       const data = await (await fetch(this.meta[name].file)).arrayBuffer();
       this.buffers[name] = await new Promise((res, rej) => this.ctx.decodeAudioData(data, res, rej));
     }

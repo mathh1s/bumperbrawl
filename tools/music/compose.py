@@ -178,23 +178,25 @@ class Song:
             for k in voicing(chord, center):
                 self.note(ch, start, span * length, k, vel)
 
-    def hits(self, ch, bar, sym, rhythm, center, vel, dur=0.2):
-        """Sixteenth note hits on chord tones: a digit picks the tone of the chord playing at that moment."""
+    def hits(self, ch, bar, sym, rhythm, center, vel, dur=0.2, step=0.25):
+        """Hits on chord tones, sixteenths unless step says otherwise: a digit picks the tone of the chord
+        playing at that moment."""
         steps = rhythm.replace(" ", "")
         for start, chord, span in self.spans(bar, sym):
             tones = voicing(chord, center)
             tones += [k + 12 for k in tones]
-            first = round((start - bar * 4) * 4)
-            for j in range(first, first + round(span * 4)):
+            first = round((start - bar * 4) / step)
+            for j in range(first, first + round(span / step)):
                 if steps[j].isdigit():
-                    self.note(ch, bar * 4 + j * 0.25, dur, tones[int(steps[j]) % len(tones)], vel + random.uniform(-6, 6))
+                    self.note(ch, bar * 4 + j * step, dur, tones[int(steps[j]) % len(tones)], vel + random.uniform(-6, 6))
 
-    def drums(self, bar, pattern, ch=9):
-        """Sixteen steps per instrument. X accent, x normal, o soft, '.' nothing."""
+    def drums(self, bar, pattern, ch=9, step=0.25):
+        """One character per step for each instrument, sixteenths by default (twelve steps a bar for
+        a triplet feel with step 1/3). X accent, x normal, o soft, '.' nothing."""
         for name, steps in pattern.items():
             for i, s in enumerate(steps.replace(" ", "")):
                 if s in "Xxo":
-                    self.note(ch, bar * 4 + i * 0.25, 0.2, DRUM[name], {"X": 118, "x": 92, "o": 58}[s] + random.uniform(-6, 6))
+                    self.note(ch, bar * 4 + i * step, 0.2, DRUM[name], {"X": 118, "x": 92, "o": 58}[s] + random.uniform(-6, 6))
 
 
 # ==== rendering ====
@@ -354,6 +356,14 @@ SUB_DROP = {"osc": [(SINE, 0, 1.0)], "amp": (0.002, 1.2, 0.0, 0.3), "pitch": (24
             "drive": 0.5}
 FAT_PAD = {"osc": [(SAW, 0, 1.0), (SAW, 7, 0.4)], "unison": 6, "detune": 28, "spread": 1.0,
            "amp": (0.15, 1.0, 0.85, 0.4), "cutoff": 2400, "res": 0.9}
+
+KAZOO = {"osc": [(SAW, 0, 1.0), (PULSE, 0, 0.5)], "pw": 0.2, "formant": "uou", "amp": (0.02, 0.2, 0.9, 0.06),
+         "vib": (6.2, 30, 0.15), "glide": 0.04, "drive": 0.9}
+SLIDE_WHISTLE = {"osc": [(SINE, 0, 1.0), (TRI, 0, 0.15)], "noise": 0.015, "amp": (0.03, 0.3, 0.9, 0.08),
+                 "glide": 0.22, "vib": (6.5, 25, 0.2), "cutoff": 6000}
+BOUNCE_BASS = {"osc": [(SINE, 0, 1.0), (TRI, 0, 0.6), (SAW, 0, 0.25)], "amp": (0.002, 0.18, 0.5, 0.04),
+               "pitch": (5, 0.02), "cutoff": 900, "filt": (0.001, 0.08, 0.0, 0.05), "env_oct": 1.5, "res": 1.2,
+               "drive": 0.4}
 
 
 def wobble_bass(period):
@@ -740,6 +750,219 @@ def final():
     return s
 
 
+def gumball():
+    """Gumball Gallop: round theme, G major circus shuffle in 12/8, every beat split in three. A rondo
+    rather than verse and chorus: the accordion tune comes back three times between a kazoo song in
+    E minor and a slide whistle interlude lifted a minor third, where the drums switch to straight
+    sixteenths against the band's triplets before everything gallops home."""
+    s = Song(150, 40)
+    t = 1 / 3
+    s.channel(0, 21, 100, 48, level=-18)          # accordion lead
+    s.channel(1, 105, 100, 84, level=-23)         # banjo strums
+    s.channel(2, 45, 100, 36, level=-23)          # pizzicato strings
+    s.channel(3, 8, 100, 76, level=-24)           # celesta, the toy piano
+    s.channel(4, 59, 100, 58, level=-19)          # muted trumpet
+    s.channel(5, 9, 100, 92, level=-25)           # glockenspiel
+    s.channel(6, 32, 100, 64, level=-20)          # upright bass
+    s.channel(9, 0, 100, 64, drums=True, level=-14)
+    s.synth("kazoo", KAZOO, -20, {"hp": 200, "delay": (0.15, 1, 0.25)})
+    s.synth("slide", SLIDE_WHISTLE, -21, {"delay": (0.3, 1, 0.35)})
+    s.synth("bounce", BOUNCE_BASS, -17, {"sidechain": (0.3, 0.3)})
+    s.synth("chop", CHOP, -21, {"delay": (0.2, 0.67, 0.3), "hp": 250})
+    s.synth("squeak", SQUEAK, -24, {"delay": (0.2, 0.67, 0.3)})
+    s.synth("rise", riser(8 * 60 / 150), -26, {"hp": 200})
+    s.synth("drop", SUB_DROP, -19, {})
+    s.lift(24, 31, 3)
+
+    a = ["G", "D/F#", "Em", "C", "G", "D", "C D", "G"]
+    b = ["Em", "B7", "Em", "Am D", "G", "C", "Am B7", "Em"]
+    c = ["C", "D", "G", "Em", "C", "D", "Am7", "D7"]
+    prog = a + b + a + c + a
+
+    tune = ["B4 - D5 G5 - B5 D6 - B5 G5 - D5", "A5 - F#5 D5 - A4 F#5 - . . . .",
+            "G5 - E5 B4 - E5 G5 - B5 E6 - .", "C6 - B5 A5 - G5 E5 - . G5 A5 B5",
+            "D6 - B5 G5 - B5 D6 - G6 D6 - .", "F#6 - E6 D6 - A5 F#5 - A5 D6 - .",
+            "E6 - C6 G5 - C6 F#6 - D6 A5 - F#5", "G5 - - - - - . . . D5 E5 F#5"]
+    song = ["E5 - - G5 - - B5 - - E6 - -", "D#6 - - B5 - - F#5 - - A5 - -",
+            "G5 - - E5 - - B5 - A5 G5 - -", "A5 - - C6 - - D6 - - F#6 - -",
+            "G6 - - D6 - - B5 - - G5 - -", "E6 - - C6 - - G5 - - E5 - -",
+            "A5 - - C6 - B5 A5 - - F#5 - D#5", "E5 - - - - - . . . D5 E5 F#5"]
+    whistle = ["E5 - - - - - G5 - - - - -", "F#5 - - - - - A5 - - - - -", "B5 - - - - - D6 - - - - -",
+               "E6 - - - - - - - - - - -", "G6 - - - - - E6 - - - - -", "F#6 - - - - - D6 - - - - -",
+               "C6 - - - - - A5 - - - - -", "D6 - - C6 - - A5 - - F#5 - -"]
+
+    for i in range(8):
+        s.line(0, i, tune[i], 96, step=t, legato=0.8)
+        s.line(4, 16 + i, tune[i], 98, step=t, legato=0.7, octave=-1)
+        s.line(0, 16 + i, tune[i], 70, step=t, legato=0.6)
+        s.line("kazoo", 8 + i, song[i], 96, step=t, legato=0.98)
+        s.line(3, 8 + i, song[i], 64, step=t, legato=0.5, octave=1)
+        s.line("slide", 24 + i, whistle[i], 96, step=t, legato=0.99)
+        s.line(0, 24 + i, whistle[i], 64, step=t, legato=0.9, octave=-1)
+        # last time round: accordion, kazoo an octave down, glockenspiel on top
+        s.line(0, 32 + i, tune[i], 100, step=t, legato=0.8)
+        s.line("kazoo", 32 + i, tune[i], 90, step=t, legato=0.9, octave=-1)
+        s.line(5, 32 + i, tune[i], 80, step=t, legato=0.5)
+
+    for bar, chord in enumerate(prog):
+        # oom pa pa on every beat: bass on the first triplet, the banjo on the other two
+        for start, ch, span in s.spans(bar, chord):
+            for beat in range(int(span)):
+                for k in voicing(ch, 64):
+                    for off in (t, 2 * t):
+                        s.note(1, start + beat + off, 0.25, k, 76 if off == t else 66)
+        s.bass("bounce", bar, chord, "R . 8 5 . 8 R . 8 5 . 8", 106, step=t)
+        s.bass(6, bar, chord, "R . . 5 . . R . . 5 . .", 96, step=t)
+        if 8 <= bar < 16 or bar >= 24:
+            s.arp(3 if bar < 16 else 5, bar, chord, [0, 1, 2, 3, 2, 1], 76, 70, step=t, legato=0.6)
+            s.bass(2, bar, chord, ". 8 . . 8 . . 8 . . 8 .", 84, octave=3, step=t)
+        # hey! on the last beat of every other bar of the tune
+        if bar % 8 in (1, 3, 5) and (bar < 8 or bar >= 16) and not 24 <= bar < 32:
+            s.hits("chop", bar, chord, ". . . . . . . . . 4 . 4", 72, 100, dur=0.2, step=t)
+        if bar % 8 == 7 and bar < 24:
+            s.note("squeak", bar * 4 + 2, 0.5, midi("D6"), 100)
+    # the slide whistle swoops into the interlude and back out of it
+    s.line("slide", 23, ". . . . . . G4 - - G6 - -", 96, step=t, legato=0.99)
+    s.note("rise", 22 * 4, 8, 60, 120)
+    s.note("rise", 30 * 4, 8, 60, 120)
+    s.note("drop", 32 * 4, 4, midi("G1"), 120)
+    s.note("drop", 0, 4, midi("G1"), 100)
+
+    shuffle = {"kick": "X.....x..x..", "snare": "...X.....X..", "hat": "x.xx.xx.xx.x"}
+    gallop = {"kick": "X..x..X..x..", "snare": "...X.....X.o", "ride": "x.xx.xx.xx.x", "tamb": "..x..x..x..x"}
+    for bar in range(40):
+        fill = bar % 8 == 7
+        if 24 <= bar < 32:
+            # two against three: the drums go straight under the triplet band
+            groove(s, bar, "four", fill, bar == 24, {"tamb": "oxoxoxoxoxoxoxox"})
+            continue
+        p = dict(gallop if bar >= 32 or 8 <= bar < 16 else shuffle)
+        if fill:
+            p.update(snare="......xxxXXX", htom="......x.....", ltom="........x...")
+        if bar % 8 == 0:
+            p["crash"] = "X..........."
+        s.drums(bar, p, step=t)
+    return s
+
+
+def sugar():
+    """Sugar Rush: round theme, a Dreamcast style breakbeat pop song led by the jelly bean singers.
+    It is shaped like a song, not a loop of one tune: an intro, an A minor verse on breaks,
+    a stop time pre chorus where the band only hits and lets the singers carry it, a C major chorus,
+    a six bar half time bridge in Eb, the chorus again a minor third up, and two bars that turn
+    back to A minor for the loop."""
+    s = Song(150, 40)
+    s.channel(0, 36, 100, 64, level=-17)          # slap bass
+    s.channel(1, 7, 100, 30, level=-24)           # clavinet
+    s.channel(2, 61, 100, 70, level=-19)          # horn section
+    s.channel(3, 0, 100, 96, level=-22)           # piano
+    s.channel(4, 56, 100, 52, level=-20)          # trumpet countermelody
+    s.channel(5, 11, 100, 84, level=-23)          # vibraphone
+    s.channel(6, 55, 100, 64, level=-19)          # orchestra hit
+    s.channel(9, 0, 100, 64, drums=True, level=-13)
+    s.synth("voice", CHOP_YA, -18, {"delay": (0.2, 0.75, 0.3), "hp": 220})
+    s.synth("voice2", CHOP, -24, {"hp": 220, "width": 1.4})
+    s.synth("saw", SUPERSAW, -21, {"sidechain": (0.7, 0.35), "hp": 180, "width": 1.3})
+    s.synth("lead", LEAD_SAW, -21, {"delay": (0.2, 0.75, 0.3), "hp": 250})
+    s.synth("spark", SPARKLE, -25, {"delay": (0.35, 0.75, 0.4), "hp": 300})
+    s.synth("talk", TALKBOX, -19, {"hp": 200, "delay": (0.2, 0.75, 0.3)})
+    s.synth("sweep", {**SWEEP_PAD, "lfo": (24, 3.0, 96)}, -22, {"chorus": (0.5, 4, 8), "hp": 150})
+    s.synth("rise", riser(8 * 60 / 150), -25, {"hp": 200})
+    s.synth("drop", SUB_DROP, -18, {})
+    s.lift(30, 37, 3)
+
+    intro = ["Am", "F", "G", "E7"]
+    verse = ["Am", "F", "G", "Em", "Am", "F", "G", "Em"]
+    pre = ["Dm", "Em", "F", "G7"]
+    chorus = ["F", "G", "Em", "Am", "F", "G", "C", "C"]
+    bridge = ["Ab", "Bb", "Gm", "Cm", "Ab", "Bb"]
+    prog = intro + verse + pre + chorus + bridge + chorus + ["F", "E7"]
+
+    verse_mel = ["A4 . C5 . E5 . D5 C5", "C5 - A4 - . . F4 A4", "B4 . D5 . G5 . F5 E5", "E5 - - - . . . .",
+                 "A4 . C5 . E5 . A5 G5", "F5 - E5 - C5 - A4 C5", "D5 . B4 . G4 . B4 D5", "E5 - - - . . E5 F5"]
+    pre_mel = ["F5 - - - . . . .", "G5 - - - . . . .", "A5 - - - . . . .", "B5 - - - D6 - F6 -"]
+    hook = ["C6 . A5 . C6 . D6 C6", "B5 - G5 - D5 . G5 B5", "B5 . G5 . B5 . E6 D6", "C6 - A5 - E5 . A5 C6",
+            "F6 . E6 . D6 . C6 A5", "B5 . C6 . D6 . G6 -", "E6 - - - D6 - C6 -", "C6 - - - . . G5 A5"]
+    counter = ["A5 - - - - - - -", "B5 - - - - - - -", "G5 - - - B5 - - -", "A5 - - - C6 - - -",
+               "A5 - - - - - - -", "D6 - - - B5 - - -", "G5 - - - - - - -", "E5 - - - G5 - C6 -"]
+    bridge_mel = ["C6 - - - Eb6 - - -", "D6 - - - F6 - - -", "D6 - Bb5 - G5 - - -", "Eb6 - - - G6 - - -",
+                  "F6 - Eb6 - C6 - Ab5 -", "D6 - - - F6 - Bb5 -"]
+
+    for i in range(4):
+        s.hits("voice", i, intro[i], "0.0.2.0. 3.2.0...", 72, 88, dur=0.18)
+    for i, mel in enumerate(verse_mel):
+        s.line("voice", 4 + i, mel, 98, legato=0.7)
+    for i, mel in enumerate(pre_mel):
+        s.line("voice", 12 + i, mel, 100, legato=0.95)
+        s.line("voice2", 12 + i, mel, 86, legato=0.95, octave=-1)
+    for i, mel in enumerate(hook):
+        for bar in (16 + i, 30 + i):
+            s.line("lead", bar, mel, 100, legato=0.85)
+            s.line("voice", bar, mel, 96, legato=0.6)
+            s.line(5, bar, mel, 70, legato=0.5)
+        s.line(4, 30 + i, counter[i], 98, legato=0.8)
+    for i, mel in enumerate(bridge_mel):
+        s.line("talk", 24 + i, mel, 92, legato=0.98)
+    s.line("lead", 38, "A5 - G5 - F5 - E5 -", 96, legato=0.9)
+    s.line("lead", 39, "G#5 - - - B5 - D6 -", 100, legato=0.9)
+
+    for bar, chord in enumerate(prog):
+        if bar < 4:
+            s.bass(0, bar, chord, "R . . R . . 8 .", 96)
+        elif bar < 12:
+            s.bass(0, bar, chord, "R . R 8 . R . 5 R . 8 R . 7 8 .", 104, step=0.25)
+            s.chords(1, bar, chord, [1, 2, 5, 6], 0.1, 66, 72)
+            if bar % 2 == 1:
+                s.hits("voice2", bar, chord, "........ ....2.3.", 74, 86, dur=0.15)
+        elif bar < 16:
+            # stop time: only the band hits, the singers hold the line
+            s.bass(0, bar, chord, "R . . R . . . .", 110)
+            s.chords(2, bar, chord, [0, 3], 0.3, 64, 106)
+            s.chords(3, bar, chord, [0, 3], 0.3, 70, 96)
+        elif bar < 24 or 30 <= bar < 38:
+            s.bass(0, bar, chord, "R . R 8 R . 8 R", 108)
+            s.chords("saw", bar, chord, [1, 3, 5, 7], 0.22, 67, 96)
+            s.chords(3, bar, chord, [1, 3, 5, 7], 0.2, 72, 84)
+            s.arp("spark", bar, chord, [0, 2, 4, 2, 1, 3, 5, 3], 74, 80)
+            if bar % 2 == 1:
+                s.chords(2, bar, chord, [3, 6], 0.25, 64, 100)
+        elif bar < 30:
+            s.pad("sweep", bar, chord, 64, 100)
+            s.bass(0, bar, chord, "R - - - . . 5 8", 100)
+            s.chords(1, bar, chord, [3, 7], 0.12, 66, 70)
+        else:
+            s.chords(2, bar, chord, [0, 3, 6], 0.3, 64, 104)
+            s.bass(0, bar, chord, "R R R R R R R R", 104)
+        if bar in (16, 30):
+            for k in voicing(chord, 60):
+                s.note(6, bar * 4, 1, k, 108)
+    s.note("rise", 14 * 4, 8, 60, 120)
+    s.note("rise", 28 * 4, 8, 60, 120)
+    s.note("drop", 16 * 4, 4, midi("A1"), 120)
+    s.note("drop", 30 * 4, 4, midi("A1"), 120)
+
+    stop = {"kick": "X.....X.........", "clap": "....X.......X..."}
+    for bar in range(40):
+        fill = bar in (11, 23, 37, 39)
+        if bar < 4:
+            groove(s, bar, "half", bar == 3, False, {"hat": "x.x.x.x.x.x.x.x."})
+        elif bar < 12:
+            groove(s, bar, "break" if bar % 2 == 0 else "break2", fill, bar == 4)
+        elif bar < 16:
+            p = dict(stop)
+            if bar == 15:
+                p["snare"] = "x.x.x.x.xxxxXXXX"
+            s.drums(bar, p)
+        elif bar < 24 or 30 <= bar < 38:
+            groove(s, bar, "hardcore", fill, bar in (16, 20, 30, 34), {"tamb": "oxoxoxoxoxoxoxox"} if bar >= 30 else None)
+        elif bar < 30:
+            groove(s, bar, "half", bar == 29, bar == 24)
+        else:
+            groove(s, bar, "four", True, False)
+    return s
+
+
+
 def victory():
     """Round winner fanfare in the same funk palette as the round theme."""
     s = Song(120, 3)
@@ -778,7 +1001,7 @@ def main():
     gugs, msg = sys.argv[1:]
     tracks = {}
     for name, make, sf, once in [("menu", menu, msg, False), ("jam", jam, msg, False), ("wobble", wobble, msg, False),
-                                 ("final", final, msg, False), ("victory", victory, gugs, True)]:
+                                 ("gumball", gumball, msg, False), ("sugar", sugar, msg, False), ("final", final, msg, False), ("victory", victory, gugs, True)]:
         # seeded per track so changing one track leaves the others' humanizing alone
         random.seed(name)
         tracks[name] = (render_once if once else render_loop)(make(), sf, name)
