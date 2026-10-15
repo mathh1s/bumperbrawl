@@ -70,9 +70,11 @@ location / {
 ## Soundtrack and sound effects
 
 The music in `web/music/` is composed in `tools/music/compose.py` and rendered with the
-MuseScore General soundfont (MIT; S. Christian Collins, based on FluidR3 by Frank Wen) and, for the victory
-jingle, [GeneralUser GS](https://github.com/mrbumpy409/GeneralUser-GS), layered with synth parts (supersaws,
-talk box, vocal chops, kazoo, slide whistle, chip pulses, wobble and acid basses) from `tools/music/synth.py`.
+small synth in `tools/music/synth.py` (drum machines, FM, pulse waves, talk box and vocal formants) plus, for a
+few songs, the MuseScore General soundfont (MIT; S. Christian Collins, based on FluidR3 by Frank Wen) and, for the
+victory jingle, [GeneralUser GS](https://github.com/mrbumpy409/GeneralUser-GS). Every song has its own kit, synths,
+room and finish: lo-fi tape funk for the menu, a horn band, an 8 bit console, a circus folk band, lo-fi electronica
+with vocal chops, and a rave against an orchestra for the last 30 seconds.
 There are four round themes that take turns, plus the menu, the last 30 seconds and the victory jingle. To change or regenerate it:
 
 ```sh

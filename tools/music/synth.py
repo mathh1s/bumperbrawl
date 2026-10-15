@@ -24,12 +24,15 @@ DEFAULT = {
     "spread": 0.0,                  # stereo width of the unison voices, 0 to 1
     "sub": 0.0,                     # sine an octave down
     "noise": 0.0,
+    "noise_rate": 0.0,              # hold each noise value this many times a second, the crunchy console noise
+    "fm": None,                     # (ratio, index, seconds the index takes to fall) two operator FM tone
     "pw": 0.5, "pwm": 0.0, "pwm_rate": 0.0,
     "amp": (0.004, 0.25, 1.0, 0.06),     # attack, decay, sustain, release in seconds
     "filt": (0.0, 0.2, 0.0, 0.1),        # same shape for the filter envelope
     "cutoff": 2500.0, "env_oct": 0.0, "keytrack": 0.0, "res": 0.8, "mode": 0,  # 0 low, 1 band, 2 high pass
     "lfo": None,                    # (period in beats, depth in octaves, offset in beats) on the cutoff
     "vib": (5.5, 0.0, 0.25),        # rate, depth in cents, fade in seconds
+    "tune": 0.0,                    # semitones added to every note
     "pitch": (0.0, 0.05),           # semitones the note starts away by, and how fast it settles
     "glide": 0.0,                   # seconds to slide from the previous note when legato
     "formant": None,                # vowels to morph through over the note, e.g. "oa"
@@ -145,7 +148,7 @@ def voice(p, key, vel, dur, start, beat, rng, slide_from=None):
     n = gate + int(p["amp"][3] * 5 * SR) + 64
     t = np.arange(n) / SR
 
-    semis = np.full(n, float(key))
+    semis = np.full(n, float(key) + p["tune"])
     if p["pitch"][0]:
         semis += p["pitch"][0] * np.exp(-t / p["pitch"][1])
     if slide_from is not None and p["glide"]:
@@ -172,8 +175,18 @@ def voice(p, key, vel, dur, start, beat, rng, slide_from=None):
     if p["sub"]:
         sub = _osc(freq / 2, SINE, pw, 0.0) * p["sub"]
         out += sub[:, None]
+    if p["fm"]:
+        ratio, index, fall = p["fm"]
+        carrier = np.cumsum(freq) / SR
+        depth = index * np.exp(-t / fall) * (vel / 127)
+        tone = np.sin(2 * np.pi * carrier + depth * np.sin(2 * np.pi * carrier * ratio))
+        out += tone[:, None]
     if p["noise"]:
-        out += rng.standard_normal((n, 2)) * p["noise"]
+        if p["noise_rate"]:
+            held = np.sign(rng.standard_normal((int(n * p["noise_rate"] / SR) + 2, 1)))
+            out += held[(t * p["noise_rate"]).astype(int)] * p["noise"]
+        else:
+            out += rng.standard_normal((n, 2)) * p["noise"]
 
     if p["formant"]:
         # a talk box: the same source through three vowel resonances that move over the note
