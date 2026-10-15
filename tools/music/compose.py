@@ -3,12 +3,12 @@
 Every track is written as note grids and patterns below, played through a
 soundfont, given a convolution reverb and encoded to mp3. The round themes
 use MuseScore General for its livelier brass and mallets; the rest use
-GeneralUser GS. Loops are cut from the middle of a three times render so the
+GeneralUser GS. Synth parts from synth.py are layered on top of the band. Loops are cut from the middle of a three times render so the
 reverb and note tails of the previous pass are already present at the loop
 start, which makes the loop seamless. The loop points land in
 web/music/tracks.json.
 
-> setup      pip install --no-deps tinysoundfont && pip install numpy scipy
+> setup      pip install --no-deps tinysoundfont && pip install numpy scipy numba
 > soundfont  git clone --depth 1 https://github.com/mrbumpy409/GeneralUser-GS
 > soundfont  https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/MuseScore_General.sf2
 > run        python3 tools/music/compose.py GeneralUser-GS.sf2 MuseScore_General.sf2
@@ -26,6 +26,8 @@ from pathlib import Path
 import numpy as np
 import tinysoundfont
 from scipy.signal import oaconvolve
+
+from synth import PULSE, SAW, SINE, TRI, render_part
 
 SR = 44100
 PAD = 0.5
@@ -83,12 +85,19 @@ class Song:
         self.events = []
         self.channels = {}
         self.levels = {}
+        self.synths = {}
+        self.sf_level = None
 
     def channel(self, ch, preset, volume=100, pan=64, bank=0, drums=False, level=None):
         """level is the target loudness in dB while the part plays; None leaves the synth's own balance."""
         self.channels[ch] = (bank, preset, drums, volume, pan)
         if level is not None:
             self.levels[ch] = level
+
+    def synth(self, name, patch, level, fx=None):
+        """A synth part next to the soundfont channels; notes go to it by name like to a channel number."""
+        self.synths[name] = (patch, fx or {})
+        self.levels[name] = level
 
     def note(self, ch, beat, dur, key, vel):
         self.events.append((beat, dur, ch, key, max(1, min(127, int(vel)))))
@@ -140,6 +149,20 @@ class Song:
             if current:
                 self.note(ch, *current)
 
+    def arp(self, ch, bar, sym, order, center, vel, step=0.25, legato=0.8):
+        """Arpeggio through the chord, order indexes the chord tones with the octave above appended."""
+        for start, chord, span in self.spans(bar, sym):
+            tones = voicing(chord, center)
+            tones += [k + 12 for k in tones]
+            for j in range(int(span / step)):
+                k = tones[order[j % len(order)] % len(tones)]
+                self.note(ch, start + j * step, step * legato, k, vel + (10 if j % 4 == 0 else 0) + random.uniform(-6, 6))
+
+    def pad(self, ch, bar, sym, center, vel, length=0.97):
+        for start, chord, span in self.spans(bar, sym):
+            for k in voicing(chord, center):
+                self.note(ch, start, span * length, k, vel)
+
     def drums(self, bar, pattern, ch=9):
         """Sixteen steps per instrument. X accent, x normal, o soft, '.' nothing."""
         for name, steps in pattern.items():
@@ -171,21 +194,32 @@ def active_rms_db(audio, window=2048):
 
 
 # Soundfont presets differ in loudness by 30 dB or more, so parts with a target
-# level are rendered alone and set to that level before mixing.
+# level are rendered alone and set to that level before mixing. Songs without
+# per channel levels render the soundfont in one go, optionally set to sf_level.
 def render(song, soundfont, repeats, tail=3.0):
-    if song.levels:
-        dry = None
-        for ch in song.channels:
+    sf_channels = [ch for ch in song.channels if ch in song.levels]
+    stems = []
+    if sf_channels:
+        for ch in sf_channels:
             part = copy.copy(song)
             part.events = [e for e in song.events if e[2] == ch]
             part.channels = {ch: song.channels[ch]}
-            part.levels = {}
             stem, loop_samples = render_dry(part, soundfont, repeats, tail)
-            if ch in song.levels:
-                stem *= 10 ** ((song.levels[ch] - active_rms_db(stem)) / 20)
-            dry = stem if dry is None else dry + stem
+            stems.append((stem, song.levels[ch]))
     else:
-        dry, loop_samples = render_dry(song, soundfont, repeats, tail)
+        part = copy.copy(song)
+        part.events = [e for e in song.events if e[2] in song.channels]
+        stem, loop_samples = render_dry(part, soundfont, repeats, tail)
+        stems.append((stem, song.sf_level))
+    total = len(stems[0][0])
+    for name, (patch, fx) in song.synths.items():
+        events = [(b, d, k, v) for b, d, ch, k, v in song.events if ch == name]
+        stems.append((render_part(events, patch, fx, song.bpm, loop_samples, repeats, total), song.levels[name]))
+    dry = None
+    for stem, level in stems:
+        if level is not None:
+            stem = stem * 10 ** ((level - active_rms_db(stem)) / 20)
+        dry = stem if dry is None else dry + stem
     ir = reverb_ir()
     wet = np.stack([oaconvolve(dry[:, c], ir[:, c])[: len(dry)] for c in range(2)], axis=1)
     return dry + wet * 0.22, loop_samples
@@ -255,21 +289,64 @@ def render_once(song, soundfont, name):
     return {"file": f"music/{name}.mp3"}
 
 
+# ==== synth patches ====
+
+SUPERSAW = {"osc": [(SAW, 0, 1.0)], "unison": 7, "detune": 38, "spread": 0.9, "amp": (0.003, 0.2, 0.3, 0.12),
+            "filt": (0.001, 0.16, 0.15, 0.1), "cutoff": 900, "env_oct": 2.6, "res": 0.9}
+DISCO_BASS = {"osc": [(SAW, 0, 1.0), (PULSE, 0, 0.5)], "sub": 0.7, "amp": (0.002, 0.25, 0.55, 0.04),
+              "filt": (0.001, 0.11, 0.0, 0.05), "cutoff": 220, "env_oct": 2.8, "res": 1.6, "drive": 0.6}
+SPARKLE = {"osc": [(SAW, 0, 0.6), (PULSE, 12, 0.4)], "amp": (0.001, 0.14, 0.0, 0.08),
+           "filt": (0.001, 0.07, 0.0, 0.05), "cutoff": 1400, "env_oct": 2.4, "res": 2.6, "keytrack": 0.5}
+SWEEP_PAD = {"osc": [(SAW, 0, 1.0), (SAW, 12, 0.3)], "unison": 5, "detune": 24, "spread": 1.0,
+             "amp": (0.35, 1.0, 0.9, 0.5), "cutoff": 5200, "res": 1.8}
+TALKBOX = {"osc": [(SAW, 0, 1.0), (PULSE, 0, 0.5)], "unison": 2, "detune": 9, "spread": 0.3, "formant": "oa",
+           "amp": (0.012, 0.3, 0.85, 0.09), "glide": 0.055, "vib": (5.6, 22, 0.3), "drive": 0.4}
+JUNO = {"osc": [(SAW, 0, 0.8), (PULSE, -12, 0.5)], "pwm": 0.2, "pwm_rate": 0.35, "amp": (0.22, 0.9, 0.75, 0.45),
+        "cutoff": 1500, "keytrack": 0.4, "res": 0.8, "filt": (0.3, 1.2, 0.4, 0.4), "env_oct": 0.8}
+BUBBLE = {"osc": [(SINE, 0, 1.0), (TRI, 12, 0.35)], "amp": (0.001, 0.16, 0.0, 0.1), "pitch": (9, 0.025),
+          "cutoff": 6000}
+CHIP = {"osc": [(PULSE, 0, 1.0)], "pw": 0.25, "pwm": 0.12, "pwm_rate": 0.4, "amp": (0.001, 0.08, 0.55, 0.02),
+        "cutoff": 9000, "velsens": 0.4}
+CHIP_LEAD = {"osc": [(PULSE, 0, 1.0)], "pw": 0.125, "amp": (0.002, 0.1, 0.7, 0.04), "cutoff": 8000,
+             "vib": (6.5, 18, 0.12), "glide": 0.03}
+BOING = {"osc": [(SINE, 0, 1.0), (TRI, 0, 0.5)], "amp": (0.001, 0.25, 0.0, 0.15), "pitch": (-14, 0.06),
+         "vib": (14, 60, 0.04), "cutoff": 5000}
+ACID = {"osc": [(SAW, 0, 1.0)], "amp": (0.002, 0.2, 0.7, 0.03), "filt": (0.001, 0.15, 0.0, 0.05),
+        "cutoff": 260, "env_oct": 3.6, "res": 5.5, "drive": 1.6, "glide": 0.045, "velsens": 0.5}
+GATE_SAW = {**SUPERSAW, "amp": (0.002, 0.09, 0.0, 0.03), "cutoff": 1600, "env_oct": 1.6}
+
+
+def wobble_bass(period):
+    return {"osc": [(SAW, 0, 1.0), (SAW, -12, 0.6)], "sub": 0.6, "amp": (0.004, 0.3, 0.9, 0.05),
+            "cutoff": 2200, "lfo": (period, 3.6, 0), "res": 2.4, "drive": 1.2}
+
+
+def riser(seconds):
+    return {"osc": [], "noise": 0.6, "amp": (seconds * 0.9, 1, 1, 0.08), "filt": (seconds, 1, 1, 0.1),
+            "cutoff": 250, "env_oct": 5, "res": 2.0, "mode": 1}
+
+
 # ==== tracks ====
 
 def jam():
-    """Jelly Jam: round theme, C major disco with a marimba hook and a horn section.
-    Played on MuseScore General, whose brass and mallets come closest to a live party band."""
+    """Jelly Jam: round theme, C major disco house with a marimba hook and a horn section.
+    The band is MuseScore General; the synths give it the club side: pumping supersaw stabs,
+    a filtered octave bass, a resonant arp and a pad that opens up through the breakdown."""
     s = Song(126, 32)
     s.channel(0, 13, 100, 44, level=-19)          # xylophone hook
     s.channel(1, 12, 100, 84, level=-22)          # marimba doubling an octave down
     s.channel(2, 56, 100, 58, level=-18)          # trumpet lead
     s.channel(3, 61, 100, 70, bank=8, level=-20)  # horn section stabs
     s.channel(4, 28, 100, 30, bank=8, level=-25)  # funk guitar chops
-    s.channel(5, 33, 100, 64, level=-16)          # fingered bass
+    s.channel(5, 33, 100, 64, level=-19)          # fingered bass, the synth bass carries the low end
     s.channel(6, 45, 100, 96, level=-24)          # pizzicato strings in the breakdown
     s.channel(7, 57, 100, 40, level=-21)          # trombone under the trumpet
     s.channel(9, 8, 100, 64, drums=True, level=-14)
+    s.synth("saw", SUPERSAW, -21, {"sidechain": (0.7, 0.35), "hp": 180, "width": 1.3})
+    s.synth("disco", DISCO_BASS, -18, {"sidechain": (0.4, 0.3)})
+    s.synth("spark", SPARKLE, -25, {"delay": (0.35, 0.75, 0.4), "hp": 300})
+    s.synth("sweep", {**SWEEP_PAD, "lfo": (32, 3.4, 96)}, -21, {"chorus": (0.5, 4, 8), "hp": 150})
+    s.synth("rise", riser(8 * 60 / 126), -27, {"hp": 200})
 
     a = ["C", "Am7", "Dm7", "G7", "C", "Am7", "Dm7 G7", "C"]
     b = ["F", "G", "Em7", "Am7", "Dm7", "G", "E7", "Am7 G7"]
@@ -302,7 +379,14 @@ def jam():
     s.line(0, 31, "G5 A5 B5 C6 D6 E6 F6 G6", 84, legato=0.6)
 
     for bar, chord in enumerate(prog):
+        if 8 <= bar < 24 or bar >= 28:
+            s.chords("saw", bar, chord, [1, 3, 5, 7], 0.22, 67, 96)
+        if 16 <= bar < 24 or bar >= 28:
+            s.arp("spark", bar, chord, [0, 2, 4, 2, 1, 3, 5, 3], 74, 82)
+        if 24 <= bar < 28:
+            s.pad("sweep", bar, chord, 64, 100)
         if bar < 24:
+            s.bass("disco", bar, chord, "R 8 R 8 R 8 R 8", 108)
             s.bass(5, bar, chord, "R 8 R 8 R 8 R 8", 104)
             s.chords(4, bar, chord, [1, 3, 5, 7], 0.12, 64, 76)
             # horn stabs answer the melody on the and of 2 and on 4
@@ -312,7 +396,10 @@ def jam():
             s.bass(5, bar, chord, "R - - - . . 5 8", 98)
         else:
             s.bass(5, bar, chord, "R R R R R R R R", 100)
+            s.bass("disco", bar, chord, "R 8 R 8 R 8 R 8", 112)
             s.chords(3, bar, chord, [0, 3, 6], 0.3, 64, 102)
+    # white noise swells into the top of the loop
+    s.note("rise", 30 * 4, 8, 60, 120)
 
     for bar in range(32):
         last = bar % 8 == 7
@@ -338,7 +425,8 @@ def jam():
 
 
 def wobble():
-    """Wobble Run: round theme, F major ska bounce with an oompah tuba and a trumpet and trombone pair."""
+    """Wobble Run: round theme, F major ska bounce with an oompah tuba and a trumpet and trombone pair,
+    crossed with an 8 bit console: pulse wave arps and lead, boings, and a wobble bass in the bridge."""
     s = Song(152, 32)
     s.channel(0, 56, 100, 52, level=-17)          # trumpet lead
     s.channel(1, 57, 100, 76, level=-21)          # trombone, melody an octave down
@@ -349,6 +437,11 @@ def wobble():
     s.channel(6, 115, 100, 64, bank=1, level=-24)  # temple blocks
     s.channel(7, 61, 100, 64, level=-20)          # brass pads in the bridge
     s.channel(9, 0, 100, 64, drums=True, level=-15)
+    s.synth("chip", CHIP, -26, {"hp": 250, "width": 1.2})
+    s.synth("lead", CHIP_LEAD, -23, {"delay": (0.4, 0.75, 0.35), "hp": 300})
+    s.synth("wob", wobble_bass(1), -18, {"hp": 35})
+    s.synth("wob2", wobble_bass(0.5), -18, {"hp": 35})
+    s.synth("boing", BOING, -23, {"delay": (0.25, 0.5, 0.3)})
 
     a = ["F", "C7", "F", "Bb", "F", "C7", "Bb C7", "F"]
     b = ["Dm", "A7", "Dm", "Gm C7", "F", "D7", "Gm C7", "F"]
@@ -366,7 +459,7 @@ def wobble():
         s.line(0, i, mel, 96, legato=0.5)
         s.line(0, 16 + i, mel, 100, legato=0.5)
         s.line(1, 16 + i, mel, 90, legato=0.5, octave=-1)
-        s.line(2, 16 + i, mel, 54, legato=0.4, octave=1)
+        s.line("lead", 16 + i, mel, 96, legato=0.7, octave=1)
     for i, mel in enumerate(runs):
         s.line(2, 8 + i, mel, 92, legato=0.5)
         s.line(1, 8 + i, mel.split()[0] + " - - - . . . .", 80, octave=-1)
@@ -386,6 +479,14 @@ def wobble():
                     s.note(7, start, span * 0.95, k, 76)
         if bar % 4 == 3:
             s.line(6, bar, ". . . . D4 D4 C4 Bb3", 90, legato=0.5)
+        if bar < 24:
+            s.arp("chip", bar, chord, [0, 1, 2, 3, 2, 1] if bar < 16 else [0, 2, 1, 3, 2, 4], 72, 86)
+        else:
+            # the bridge drops the skank feel into a wobble, twice as fast in its second half
+            for start, ch, span in s.spans(bar, chord):
+                s.note("wob" if bar < 28 else "wob2", start, span * 0.98, bass_root(ch, 2), 104)
+        if bar % 4 == 1:
+            s.note("boing", bar * 4 + 3.5, 0.4, midi("F5"), 104)
 
     for bar in range(32):
         p = {"kick": "x.......x.......", "snare": "....X.......X...", "hat": "..x...x...x...x."}
@@ -402,9 +503,12 @@ def wobble():
 
 
 def menu():
-    """Blob Lounge: menu and between rounds, F major funk at strutting pace."""
+    """Blob Lounge: menu and between rounds, F major funk at strutting pace, sung by a talk box lead
+    over a chorused poly pad, with bubbly blips at the end of every other bar."""
     s = Song(112, 16)
-    s.channel(0, 80, 100, 46, level=-19)    # square lead, gentle
+    s.synth("talk", TALKBOX, -19, {"hp": 200, "delay": (0.18, 0.75, 0.3)})
+    s.synth("juno", JUNO, -25, {"chorus": (0.6, 5, 8), "hp": 160})
+    s.synth("bub", BUBBLE, -27, {"delay": (0.35, 0.75, 0.4)})
     s.channel(1, 11, 100, 82, level=-21)    # vibraphone doubling
     s.channel(2, 36, 100, 64, level=-18)   # slap bass
     s.channel(3, 4, 100, 38, level=-24)     # electric piano
@@ -419,8 +523,13 @@ def menu():
               "D6 . F6 . D6 C6 Bb5 .", "C6 - A5 - G5 . E5 .", "F5 . G5 . Bb5 . D6 .", "E6 - - - C6 - Bb5 -",
               "A5 . Bb5 . D6 . F6 .", "E6 - C6 - F#5 - A5 -", "G5 . Bb5 . E5 . G5 .", "F5 - - - . . . ."]
     for bar, (chord, mel) in enumerate(zip(prog, melody)):
-        s.line(0, bar, mel, 84, legato=0.6)
-        s.line(1, bar, mel, 72, legato=0.7)
+        s.line("talk", bar, mel, 90, legato=0.98)
+        s.line(1, bar, mel, 64, legato=0.7)
+        s.pad("juno", bar, chord, 60, 90)
+        if bar % 2 == 1:
+            tones = voicing(chord.split()[-1], 79)
+            for j, k in enumerate(tones):
+                s.note("bub", bar * 4 + 2.5 + j * 0.5, 0.2, k, 92)
         s.chords(3, bar, chord, [3, 7], 0.45, 62, 66)
         s.chords(4, bar, chord, [1, 3, 5, 6], 0.1, 67, 60)
         s.bass(2, bar, chord, "R . . R . 8 R .", 100)
@@ -437,8 +546,15 @@ def menu():
 
 
 def final():
-    """Crumble!: last thirty seconds, D minor, urgent but still playful."""
+    """Crumble!: last thirty seconds, D minor, urgent but still playful. An acid bass squelches in
+    after four bars and a gated supersaw stutters through the second half."""
     s = Song(150, 16)
+    s.sf_level = -14
+    s.synth("acid", ACID, -20, {"hp": 40, "delay": (0.15, 0.75, 0.25)})
+    s.synth("gate", GATE_SAW, -24, {"sidechain": (0.5, 0.3), "hp": 200, "width": 1.3})
+    s.synth("rise", riser(8 * 60 / 150), -26, {"hp": 200})
+    acid = [(0, 118), None, (12, 90), (0, 80), (10, 100), (0, 76), (12, 120), (7, 86),
+            (0, 110), (0, 72), None, (12, 104), (0, 78), (15, 96), (12, 116), (10, 90)]
     s.channel(0, 48, 86, 40)    # strings ostinato
     s.channel(1, 61, 96, 70)    # brass section
     s.channel(2, 9, 62, 30)     # glockenspiel
@@ -469,12 +585,24 @@ def final():
         if bar in (0, 8):
             for k in voicing(chord, 60):
                 s.note(5, bar * 4, 1, k, 96)
+        root2 = bass_root(chord, 2)
+        if bar >= 4:
+            for j, step in enumerate(acid):
+                if step:
+                    # loud steps open the filter further; every fourth step slides into the next
+                    s.note("acid", bar * 4 + j * 0.25, 0.26 if j % 4 == 3 else 0.16, root2 + step[0], step[1])
+        if bar >= 8:
+            for j, on in enumerate("x.xxx.xxx.xx.xxx"):
+                if on == "x":
+                    for k in voicing(chord, 67):
+                        s.note("gate", bar * 4 + j * 0.25, 0.14, k, 100 if j % 4 == 0 else 80)
         p = {"kick": "X...x...X...x...", "snare": "....X.......X.o.", "hat": "xoxoxoxoxoxoxoxo"}
         if bar in (7, 15):
             p.update(snare="....X.......xxxx", htom="........xx......", ltom="..........xx....")
         if bar in (0, 8):
             p["crash"] = "X..............."
         s.drums(bar, p)
+    s.note("rise", 14 * 4, 8, 60, 120)
     return s
 
 

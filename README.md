@@ -71,10 +71,11 @@ location / {
 
 The music in `web/music/` is composed in `tools/music/compose.py` and rendered with the
 [GeneralUser GS](https://github.com/mrbumpy409/GeneralUser-GS) soundfont and, for the two round themes,
-MuseScore General (MIT; S. Christian Collins, based on FluidR3 by Frank Wen). To change or regenerate it:
+MuseScore General (MIT; S. Christian Collins, based on FluidR3 by Frank Wen), layered with synth parts
+(supersaws, talk box, chip pulses, wobble and acid basses) from `tools/music/synth.py`. To change or regenerate it:
 
 ```sh
-pip install --no-deps tinysoundfont && pip install numpy scipy
+pip install --no-deps tinysoundfont && pip install numpy scipy numba
 git clone --depth 1 https://github.com/mrbumpy409/GeneralUser-GS /tmp/gugs
 curl -Lo /tmp/msg.sf2 https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/MuseScore_General.sf2
 python3 tools/music/compose.py /tmp/gugs/GeneralUser-GS.sf2 /tmp/msg.sf2
