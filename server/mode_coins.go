@@ -60,6 +60,7 @@ func (g *Game) updateCoins(dt float64) {
 		}
 		if p := g.coinTaker(c); p != nil {
 			p.Score++
+			p.Stats.Coins++
 			g.events = append(g.events, map[string]any{"k": "cp", "i": p.ID, "x": r2(c.X), "z": r2(c.Z)})
 			continue
 		}

@@ -375,6 +375,38 @@ kbd {
 #board .out { font-size: 11px; opacity: 0.55; text-transform: uppercase; }
 #board .wins { font-size: 11px; font-weight: 700; color: #e8a400; -webkit-text-stroke: 0.4px var(--ink); }
 
+/* ==== match awards ==== */
+
+#awards {
+  position: absolute; right: 16px; bottom: 76px;
+  display: flex; flex-direction: column; gap: 10px;
+  width: 230px;
+  margin: 0; padding: 0; list-style: none;
+}
+#awards li {
+  padding: 8px 12px 9px;
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 4px 0 var(--ink);
+  animation: deal 0.45s cubic-bezier(.2, 1.6, .4, 1) both;
+}
+#awards li:nth-child(odd) { transform: rotate(-1.5deg); }
+#awards li:nth-child(even) { transform: rotate(1.2deg); }
+#awards li.me { background: #fff4c2; }
+#awards b { display: block; font: 400 20px/1.1 "Lilita One", var(--font); color: var(--accent); }
+#awards .who { display: flex; align-items: center; gap: 6px; margin-top: 3px; font-weight: 700; }
+#awards .dot { width: 11px; height: 11px; border-radius: 50%; border: 2px solid var(--ink); flex: none; }
+#awards small { display: block; font-size: 13px; opacity: 0.7; }
+@keyframes deal { from { opacity: 0; translate: 60px 0; } }
+@media (prefers-reduced-motion: reduce) { #awards li { animation: none; } }
+/* phones: the awards take the bottom of the screen, two by two, instead of the standings */
+@media (max-width: 700px) {
+  #awards { left: 12px; right: 12px; bottom: 12px; width: auto; display: grid; grid-template-columns: 1fr 1fr; }
+  #awards b { font-size: 16px; }
+  body.awards #standings { display: none; }
+}
+
 /* ==== emotes ==== */
 
 #bubbles { position: absolute; inset: 0; overflow: hidden; }

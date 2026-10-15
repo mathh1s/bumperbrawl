@@ -104,6 +104,7 @@ type Player struct {
 	MatchPts int
 
 	EmoteAt    float64
+	Stats      Stats // this match, for the awards
 	think      float64
 	goalX      float64 // where a bot is walking to in Hex Drop
 	goalZ      float64
@@ -254,6 +255,7 @@ func (g *Game) endRound() {
 		g.phaseT = matchIntermission
 		ev["ch"] = names(g.champions())
 		ev["top"] = g.matchPodium()
+		ev["aw"] = g.matchAwards()
 	}
 	g.events = append(g.events, ev)
 }
@@ -482,6 +484,10 @@ func (g *Game) knockOut(p *Player) {
 	}
 	if g.phase == phasePlay {
 		g.scoreKnockOut(p, killer, ev)
+		p.Stats.Falls++
+		if killer != nil {
+			killer.Stats.Bonks++
+		}
 	}
 	g.botReact(killer)
 	g.events = append(g.events, ev)

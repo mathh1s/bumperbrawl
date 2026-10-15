@@ -187,6 +187,11 @@ func (g *Game) goal(team int) {
 	if p, ok := g.players[g.ball.LastTouch]; ok {
 		ev["by"] = p.ID
 		ev["own"] = p.Team != team
+		if p.Team != team {
+			p.Stats.OwnGoals++
+		} else {
+			p.Stats.Goals++
+		}
 	}
 	g.events = append(g.events, ev)
 	g.ball.Hidden, g.ball.ResetT = true, ballResetDelay

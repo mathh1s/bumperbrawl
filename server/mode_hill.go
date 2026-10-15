@@ -83,6 +83,7 @@ func (g *Game) updateHill(dt float64) {
 		rate = hillShareRate
 	}
 	owner.HillT += dt * rate
+	owner.Stats.Hill += dt
 	// summing many small ticks lands a hair under whole seconds, which must still count
 	for owner.HillT >= 1-1e-9 {
 		owner.HillT--

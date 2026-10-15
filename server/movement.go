@@ -90,6 +90,7 @@ func (p *Player) move(dt float64) {
 		p.DashPow = pow
 		p.Charging, p.ChargeT = false, 0
 		p.Ghost = 0
+		p.Stats.Dashes++
 	}
 	p.WantDash = false
 

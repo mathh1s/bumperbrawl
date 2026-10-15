@@ -91,6 +91,7 @@ func (g *Game) updateJump(p *Player, dt float64) {
 	if p.WantJump && !p.Airborne && p.PoundT == 0 && p.JumpCD == 0 {
 		p.Airborne = true
 		p.VY = jumpSpeed
+		p.Stats.Jumps++
 	}
 	p.WantJump = false
 	if !p.Airborne {

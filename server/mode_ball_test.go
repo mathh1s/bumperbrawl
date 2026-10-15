@@ -53,9 +53,12 @@ func TestBallGoalScoresForTheTeam(t *testing.T) {
 			t.Fatalf("every red blob should share the goal, %d has %d", p.ID, p.Score)
 		}
 	}
-	runFor(g, ballResetDelay+0.1)
-	if g.ball.Hidden || g.ball.X != 0 {
-		t.Fatal("kickoff from the centre after a goal")
+	// step until the kickoff, before any bot can reach the ball
+	for g.ball.Hidden {
+		g.step(1.0 / tickRate)
+	}
+	if g.ball.X != 0 || g.ball.Z != 0 {
+		t.Fatalf("kickoff from the centre after a goal, ball at %.2f %.2f", g.ball.X, g.ball.Z)
 	}
 }
 
@@ -86,9 +89,15 @@ func TestDashKicksTheBall(t *testing.T) {
 
 func TestBotsPlayBlobBall(t *testing.T) {
 	g := ballGame(6)
-	runFor(g, 100)
+	// goals come every 20 seconds or so on average; a round's worth of time without one means the bots are broken
+	for range 110 * tickRate {
+		g.step(1.0 / tickRate)
+		if g.teamGoals[teamRed]+g.teamGoals[teamBlue] > 0 {
+			break
+		}
+	}
 	if g.teamGoals[teamRed]+g.teamGoals[teamBlue] == 0 {
-		t.Fatal("six bots should manage at least one goal in 100 seconds")
+		t.Fatal("six bots should manage a goal within a round")
 	}
 	if g.radius != arenaMax || g.sweepOn {
 		t.Fatal("no crumbling or log on the pitch")

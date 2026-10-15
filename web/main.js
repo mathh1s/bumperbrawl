@@ -358,6 +358,7 @@ function fireEvents(rt, view) {
         break;
       case 'lobby':
         podium.hide();
+        hideAwards();
         lastEnd = null;
         $('standings').hidden = true;
         document.body.classList.remove('standings');
@@ -365,6 +366,7 @@ function fireEvents(rt, view) {
         break;
       case 'start': {
         podium.hide();
+        hideAwards();
         lastEnd = null;
         $('standings').hidden = true;
         document.body.classList.remove('standings');
@@ -408,6 +410,7 @@ function fireEvents(rt, view) {
           banner(text, 4000);
         }
         showStandings(e.st ?? [], e.mo);
+        if (e.mo) showAwards(e.aw ?? []);
         music.victory();
         break;
       }
@@ -466,6 +469,23 @@ function showStandings(list, final) {
     `<li class="${p.i === myId ? 'me' : ''}"><span class="dot" style="background:${PALETTE[p.c]}"></span>`
     + `<span class="nm">${esc(p.n)}</span><span class="stars">${'★'.repeat(Math.min(p.w, 5))}${p.w > 5 ? `×${p.w}` : ''}</span></li>`,
   ).join('');
+}
+
+// silly titles from the match, dealt onto the podium screen one after another
+function showAwards(list) {
+  const el = $('awards');
+  el.hidden = !list.length;
+  document.body.classList.toggle('awards', list.length > 0);
+  el.innerHTML = list.map((a, i) =>
+    `<li style="animation-delay:${1.2 + i * 0.45}s" class="${a.i === myId ? 'me' : ''}">`
+    + `<b>${esc(a.t)}</b><span class="who"><span class="dot" style="background:${PALETTE[a.c]}"></span>${esc(a.n)}</span>`
+    + `<small>${esc(a.d)}</small></li>`,
+  ).join('');
+}
+
+function hideAwards() {
+  $('awards').hidden = true;
+  document.body.classList.remove('awards');
 }
 
 const CROWN_SVG = '<svg class="crown" viewBox="0 0 24 18"><path d="M2 16h20l1-11-6 4-5-8-5 8-6-4z"/></svg>';
@@ -805,6 +825,7 @@ function backToMenu(reason) {
   predictor = null;
   wantJoin = null;
   podium.hide();
+  hideAwards();
   $('menu').hidden = false;
   $('hud').hidden = true;
   $('touch').hidden = true;
@@ -972,6 +993,7 @@ function frame(now) {
     }
     if (view.ph !== 1 && (podium.active || !$('standings').hidden)) {
       podium.hide();
+      hideAwards();
       $('standings').hidden = true;
       document.body.classList.remove('standings');
     }
