@@ -32,6 +32,7 @@ const (
 	intermission = 8.0
 	maxHumans    = 16
 	paletteSize  = 8
+	hatCount     = 9
 )
 
 const (
@@ -51,6 +52,7 @@ type Player struct {
 	ID    int
 	Name  string
 	Color int
+	Hat   int
 	Bot   bool
 
 	X, Z, Y    float64
@@ -336,7 +338,7 @@ func (g *Game) syncBots() {
 		bots = bots[:len(bots)-1]
 	}
 	for len(bots) < want {
-		p := g.newPlayer(g.freeBotName(), rand.IntN(paletteSize), true)
+		p := g.newPlayer(g.freeBotName(), rand.IntN(paletteSize), rand.IntN(hatCount), true)
 		bots = append(bots, p)
 	}
 }
@@ -403,9 +405,9 @@ func (g *Game) thinkBots(dt float64) {
 
 // ==== players and clients ====
 
-func (g *Game) newPlayer(name string, color int, bot bool) *Player {
+func (g *Game) newPlayer(name string, color, hat int, bot bool) *Player {
 	g.nextID++
-	p := &Player{ID: g.nextID, Name: name, Color: color, Bot: bot}
+	p := &Player{ID: g.nextID, Name: name, Color: color, Hat: hat, Bot: bot}
 	g.players[p.ID] = p
 	g.respawn(p)
 	return p
@@ -445,6 +447,7 @@ type inMsg struct {
 	T string  `json:"t"`
 	N string  `json:"n"`
 	C int     `json:"c"`
+	H int     `json:"h"`
 	X float64 `json:"x"`
 	Z float64 `json:"z"`
 }
@@ -465,7 +468,11 @@ func (g *Game) handle(c *Client, m inMsg) {
 		if color < 0 || color >= paletteSize {
 			color = rand.IntN(paletteSize)
 		}
-		c.player = g.newPlayer(cleanName(m.N), color, false)
+		hat := m.H
+		if hat < 0 || hat >= hatCount {
+			hat = 0
+		}
+		c.player = g.newPlayer(cleanName(m.N), color, hat, false)
 		g.syncBots()
 		g.queue(c, mustJSON(map[string]any{
 			"t": "welcome", "id": c.player.ID,
@@ -527,7 +534,7 @@ func (g *Game) broadcast(msg []byte) {
 func (g *Game) rosterMsg() []byte {
 	list := make([]map[string]any, 0, len(g.players))
 	for _, p := range g.players {
-		list = append(list, map[string]any{"i": p.ID, "n": p.Name, "c": p.Color, "b": p.Bot})
+		list = append(list, map[string]any{"i": p.ID, "n": p.Name, "c": p.Color, "h": p.Hat, "b": p.Bot})
 	}
 	return mustJSON(map[string]any{"t": "roster", "p": list})
 }

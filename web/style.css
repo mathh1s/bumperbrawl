@@ -34,15 +34,19 @@ html, body {
 
 /* ==== menu ==== */
 
+/* auto margins center the card but let it scroll instead of clipping on short screens */
 #menu {
   position: fixed; inset: 0;
-  display: grid; place-items: center;
+  display: grid; justify-items: center;
+  overflow-y: auto;
+  touch-action: pan-y;
   background: radial-gradient(circle at 50% 40%, rgba(45, 36, 64, 0.05), rgba(45, 36, 64, 0.45));
   padding: 16px;
 }
 
 .card {
   width: min(360px, 100%);
+  margin: auto 0;
   background: var(--paper);
   border: 4px solid var(--ink);
   border-radius: 28px;
@@ -66,7 +70,34 @@ h1 {
   transform: rotate(-3deg);
 }
 
-.tag { margin: 14px 0 18px; font-size: 15px; opacity: 0.75; }
+.tag { margin: 14px 0 4px; font-size: 15px; opacity: 0.75; }
+
+#preview { display: block; width: 100%; height: 150px; cursor: pointer; }
+
+.hatpick {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  margin: 0 0 14px;
+  font-weight: 600;
+}
+.hatpick span { min-width: 110px; }
+.hatpick button {
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 3px solid var(--ink);
+  background: #fff;
+  font: 700 22px/1 var(--font);
+  color: var(--ink);
+  cursor: pointer;
+  padding: 0 0 3px;
+  box-shadow: 0 3px 0 var(--ink);
+}
+.hatpick button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+
+@media (max-height: 700px) {
+  #preview { height: 100px; }
+  h1 { font-size: 44px; }
+  .card { padding: 20px 22px 16px; }
+}
 
 #name {
   width: 100%;
@@ -241,5 +272,7 @@ body.touch #dash { display: none; }
   #board { font-size: 13px; min-width: 130px; padding: 6px 8px; }
   #board .nm { max-width: 80px; }
   #feed { top: 78px; font-size: 12px; }
+  #timer { left: 14px; transform: none; padding: 4px 12px 6px; }
+  #timer span { font-size: 9px; }
   #timer b { font-size: 22px; }
 }

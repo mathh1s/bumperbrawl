@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { World, makeRamp } from './world.js';
-import { Blob, PALETTE } from './blobs.js';
+import { Blob, PALETTE, HATS } from './blobs.js';
+import { Preview } from './preview.js';
 import { FX } from './fx.js';
 import { Input } from './input.js';
 import { initAudio, sfx } from './audio.js';
@@ -301,12 +302,20 @@ function pumpInput(dt) {
 
 // ==== menu ====
 
-let chosenColor = 0;
+let chosenColor = Math.floor(Math.random() * PALETTE.length);
+let chosenHat = Math.floor(Math.random() * HATS.length);
 try {
   $('name').value = localStorage.getItem('bb.name') ?? '';
-  chosenColor = Number(localStorage.getItem('bb.color') ?? Math.floor(Math.random() * PALETTE.length)) % PALETTE.length;
-} catch {
-  chosenColor = Math.floor(Math.random() * PALETTE.length);
+  const c = localStorage.getItem('bb.color');
+  const h = localStorage.getItem('bb.hat');
+  if (c !== null) chosenColor = Number(c) % PALETTE.length;
+  if (h !== null) chosenHat = Number(h) % HATS.length;
+} catch { /* storage blocked, keep random picks */ }
+
+const preview = new Preview($('preview'), ramp);
+function refreshLook() {
+  $('hatName').textContent = HATS[chosenHat];
+  preview.set(chosenColor, chosenHat);
 }
 
 const colorsEl = $('colors');
@@ -320,9 +329,13 @@ PALETTE.forEach((c, i) => {
   b.onclick = () => {
     chosenColor = i;
     [...colorsEl.children].forEach((el, k) => el.setAttribute('aria-pressed', String(k === i)));
+    refreshLook();
   };
   colorsEl.append(b);
 });
+$('hatPrev').onclick = () => { chosenHat = (chosenHat + HATS.length - 1) % HATS.length; refreshLook(); };
+$('hatNext').onclick = () => { chosenHat = (chosenHat + 1) % HATS.length; refreshLook(); };
+refreshLook();
 
 $('play').disabled = true;
 $('joinForm').addEventListener('submit', (e) => {
@@ -332,8 +345,9 @@ $('joinForm').addEventListener('submit', (e) => {
   try {
     localStorage.setItem('bb.name', name);
     localStorage.setItem('bb.color', String(chosenColor));
+    localStorage.setItem('bb.hat', String(chosenHat));
   } catch { /* storage blocked, not important */ }
-  wantJoin = { t: 'join', n: name, c: chosenColor };
+  wantJoin = { t: 'join', n: name, c: chosenColor, h: chosenHat };
   send(wantJoin);
   $('name').blur();
 });
@@ -383,7 +397,7 @@ function frame(now) {
       if (!info) continue;
       let b = blobs.get(id);
       if (!b) {
-        b = new Blob({ name: info.n, color: info.c, me: id === myId, ramp });
+        b = new Blob({ name: info.n, color: info.c, hat: info.h, me: id === myId, ramp });
         blobs.set(id, b);
         scene.add(b.group);
       }
@@ -404,6 +418,7 @@ function frame(now) {
   updateCamera(dt, view);
   updateHud(dt, view);
   renderer.render(scene, camera);
+  if (!joined) preview.render(dt);
 }
 
 // labels are drawn to canvas once, so wait for the font before any blob exists
