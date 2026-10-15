@@ -5,7 +5,7 @@ let noise = null;
 export function initAudio() {
   if (!ctx) {
     const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return;
+    if (!AC) return null;
     ctx = new AC();
     master = ctx.createGain();
     master.gain.value = 0.35;
@@ -15,6 +15,7 @@ export function initAudio() {
     for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   }
   ctx.resume();
+  return ctx;
 }
 
 function tone(f0, f1, dur, { type = 'sine', vol = 0.5, delay = 0 } = {}) {
@@ -70,8 +71,5 @@ export const sfx = {
   },
   start() {
     [392, 523, 659, 784].forEach((f, i) => tone(f, f * 1.01, 0.16, { type: 'square', vol: 0.1, delay: i * 0.09 }));
-  },
-  end() {
-    [784, 659, 784, 1046].forEach((f, i) => tone(f, f, 0.2, { type: 'triangle', vol: 0.22, delay: i * 0.12 }));
   },
 };

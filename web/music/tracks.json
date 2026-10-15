@@ -1,0 +1,20 @@
+{
+  "menu": {
+    "file": "music/menu.mp3",
+    "loopStart": 0.5,
+    "loopEnd": 40.5
+  },
+  "battle": {
+    "file": "music/battle.mp3",
+    "loopStart": 0.5,
+    "loopEnd": 58.68181405895692
+  },
+  "final": {
+    "file": "music/final.mp3",
+    "loopStart": 0.5,
+    "loopEnd": 26.1
+  },
+  "victory": {
+    "file": "music/victory.mp3"
+  }
+}

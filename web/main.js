@@ -5,6 +5,7 @@ import { Preview } from './preview.js';
 import { FX } from './fx.js';
 import { Input } from './input.js';
 import { initAudio, sfx } from './audio.js';
+import { Music } from './music.js';
 
 const INTERP_MS = 110;
 const ARENA_MAX = 15;
@@ -197,7 +198,7 @@ function fireEvents(rt, view) {
       case 'end':
         if (joined) {
           banner(e.w ? `${esc(e.w)} wins!<small>${e.s} bonk${e.s === 1 ? '' : 's'}</small>` : 'Round over!<small>nobody takes it</small>', 4000);
-          sfx.end();
+          music.victory();
         }
         break;
     }
@@ -337,10 +338,33 @@ $('hatPrev').onclick = () => { chosenHat = (chosenHat + HATS.length - 1) % HATS.
 $('hatNext').onclick = () => { chosenHat = (chosenHat + 1) % HATS.length; refreshLook(); };
 refreshLook();
 
+// ==== audio ====
+
+const music = new Music();
+// browsers only allow audio after a gesture; touchend and click are the ones iOS accepts
+function unlockAudio() {
+  music.init(initAudio());
+}
+for (const type of ['pointerup', 'touchend', 'click', 'keydown']) document.addEventListener(type, unlockAudio, true);
+
+function renderMusicButton() {
+  $('musicBtn').classList.toggle('off', !music.enabled);
+  $('musicBtn').setAttribute('aria-pressed', String(music.enabled));
+}
+$('musicBtn').addEventListener('click', () => {
+  music.setEnabled(!music.enabled);
+  renderMusicButton();
+});
+renderMusicButton();
+
+function pickTrack(view) {
+  if (!joined || !view || view.ph === 1) return 'menu';
+  return view.tl <= 30 ? 'final' : 'battle';
+}
+
 $('play').disabled = true;
 $('joinForm').addEventListener('submit', (e) => {
   e.preventDefault();
-  initAudio();
   const name = $('name').value.trim();
   try {
     localStorage.setItem('bb.name', name);
@@ -417,6 +441,7 @@ function frame(now) {
   pumpInput(dt);
   updateCamera(dt, view);
   updateHud(dt, view);
+  music.play(pickTrack(view));
   renderer.render(scene, camera);
   if (!joined) preview.render(dt);
 }
