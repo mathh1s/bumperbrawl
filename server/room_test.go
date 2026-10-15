@@ -166,3 +166,23 @@ func TestRoomInfo(t *testing.T) {
 		t.Fatal("the public room is not looked up by code")
 	}
 }
+
+func TestEmotesAreRateLimited(t *testing.T) {
+	g := testGame()
+	c := &Client{send: make(chan []byte, 64)}
+	g.addClient(c)
+	g.handle(c, inMsg{T: "join"})
+	g.events = nil
+	g.handle(c, inMsg{T: "emote", I: 2})
+	g.handle(c, inMsg{T: "emote", I: 3})
+	g.handle(c, inMsg{T: "emote", I: 99})
+	if len(g.events) != 1 || g.events[0]["e"] != 2 {
+		t.Fatalf("one emote per cooldown and only known ids, got %v", g.events)
+	}
+	runFor(g, emoteCooldown+0.1)
+	g.events = nil
+	g.handle(c, inMsg{T: "emote", I: 3})
+	if len(g.events) != 1 {
+		t.Fatal("emotes work again after the cooldown")
+	}
+}

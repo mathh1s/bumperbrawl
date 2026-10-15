@@ -7,6 +7,7 @@ import { Sweeper } from './sweeper.js';
 import { HillRing } from './hill.js';
 import { Coins } from './coins.js';
 import { BallPitch } from './ball.js';
+import { Bubbles, EMOTES } from './emotes.js';
 import { FX } from './fx.js';
 import { Crates, POWERS } from './crates.js';
 import { modeOf, OUT, TEAMS } from './modes.js';
@@ -46,6 +47,8 @@ const sweeper = new Sweeper(scene, ramp, fx);
 const hillRing = new HillRing(scene);
 const coins = new Coins(scene, ramp);
 const pitch = new BallPitch(scene, ramp);
+const bubbles = new Bubbles($('bubbles'));
+const bubbleVec = new THREE.Vector3();
 const lastScores = new Map();
 const arrowPos = new THREE.Vector3();
 sweeper.onLand = () => {
@@ -326,6 +329,10 @@ function fireEvents(rt, view) {
         coins.spill(e.ids, e.x, e.z);
         if (e.i === myId && joined) banner(`-${e.ids.length}<small>your coins went flying</small>`, 1400);
         break;
+      case 'em':
+        // your own bubble already went up when you pressed the key
+        if (e.i !== myId) bubbles.show(e.i, e.e);
+        break;
       case 'goal': {
         const team = TEAMS[e.t];
         const by = e.by ? nameOf(e.by) : null;
@@ -555,6 +562,37 @@ function applyPrediction(view) {
   if (pv.dashing) flags |= 1;
   view.players.set(myId, { ...s, x: pv.x, y: pv.y, z: pv.z, a: pv.a, ch: pv.ch, flags });
 }
+
+// ==== emotes ====
+
+let emoteReady = 0;
+function sendEmote(i) {
+  if (!joined || performance.now() < emoteReady) return;
+  // matches the server cooldown, so a bubble shown here is one the others see too
+  emoteReady = performance.now() + 1250;
+  bubbles.show(myId, i);
+  send({ t: 'emote', i });
+  sfx.click();
+  showEmotePicker(false);
+}
+
+function showEmotePicker(open) {
+  $('emotePicker').hidden = !open;
+  $('emoteBtn').setAttribute('aria-expanded', String(open));
+}
+
+$('emotePicker').innerHTML = EMOTES.map((t, i) => `<button type="button" role="menuitem" data-e="${i}"><kbd>${i + 1}</kbd>${t}</button>`).join('');
+$('emotePicker').addEventListener('click', (e) => {
+  const b = e.target.closest('[data-e]');
+  if (b) sendEmote(Number(b.dataset.e));
+});
+$('emoteBtn').addEventListener('click', () => showEmotePicker($('emotePicker').hidden));
+addEventListener('keydown', (e) => {
+  if (e.target instanceof HTMLInputElement || e.repeat) return;
+  const n = Number(e.key);
+  if (n >= 1 && n <= EMOTES.length) sendEmote(n - 1);
+  if (e.key === 'Escape') showEmotePicker(false);
+});
 
 // ==== menu ====
 
@@ -945,6 +983,7 @@ function frame(now) {
   hillRing.update(view?.hl, dt, t, (id) => roster.get(id)?.c ?? 0);
   coins.sync(view?.co, dt, t);
   pitch.update(view?.pt, view?.bl, dt);
+  if (view) bubbles.update(camera, view.players, bubbleVec);
   world.setIslandVisible(!view?.pt);
   if (view?.hl) popHillPoints(view);
   // the same edge arrow points at the ball when it is off screen

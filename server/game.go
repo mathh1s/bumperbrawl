@@ -103,6 +103,7 @@ type Player struct {
 	Wins     int
 	MatchPts int
 
+	EmoteAt    float64
 	think      float64
 	botRelease float64
 }
@@ -462,6 +463,7 @@ func (g *Game) knockOut(p *Player) {
 	if g.phase == phasePlay {
 		g.scoreKnockOut(p, killer, ev)
 	}
+	g.botReact(killer)
 	g.events = append(g.events, ev)
 }
 
@@ -744,6 +746,10 @@ func (g *Game) handle(c *Client, m inMsg) {
 	case "charge":
 		if p := c.player; p != nil && !p.Falling && p.DashCD == 0 && !p.Charging {
 			p.Charging, p.ChargeT, p.ChargeStep = true, 0, m.S
+		}
+	case "emote":
+		if c.player != nil {
+			g.emote(c.player, m.I)
 		}
 	case "jump":
 		if c.player != nil {

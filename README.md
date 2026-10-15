@@ -14,6 +14,7 @@ A small online 3D party brawler. Everyone is a squishy blob on a floating hex is
   - Blob Ball: two teams and a big ball, bonk it into the other team's goal. It's played in a walled stadium instead of on the island, so nobody can fall off
 - Hold dash to charge a stronger launch; tap for a quick one
 - Power-up crates: heavy, bouncy and ground pound
+- Emotes: keys 1 to 8 (or the speech bubble button) pop a reaction over your blob; bots laugh at their knockouts sometimes
 - Rated public matches: each browser gets a random key (no account, no password), and finishing a public match moves your rating like chess Elo against everyone you finished above or below, bots counting as 1000. Tiers show next to names and the menu has a leaderboard. Private rooms are never rated
 - In the last 30 seconds a giant log sweeps the island; jump it or get swept away
 - The leader wears a crown worth 2 points to whoever knocks them off; rounds end on a podium
@@ -93,6 +94,7 @@ web/     main.js   netcode, interpolation, camera, HUD
          predict.js  client-side prediction of your own blob
          lobby.js    private room lobby panel
          rank.js     rating tiers and the per-browser player key
+         emotes.js   emote bubbles
          ball.js     Blob Ball stadium, goals and ball
          world.js  sky, water, crumbling island, scenery
          blobs.js    player characters and hats
