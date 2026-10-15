@@ -27,7 +27,7 @@
   "final": {
     "file": "music/final.mp3",
     "loopStart": 0.5,
-    "loopEnd": 31.863628117913834
+    "loopEnd": 33.98836734693877
   },
   "victory": {
     "file": "music/victory.mp3"

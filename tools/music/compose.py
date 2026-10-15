@@ -415,6 +415,18 @@ def block(hz=900, decay=0.06):
             "amp": (0.0005, decay, 0.0, 0.03), "cutoff": 9000}
 
 
+def click(bright=3000, decay=0.012):
+    # a dry mechanical tick: a burst of band passed noise with no pitch, so it can't chirp
+    return {"osc": [], "noise": 1.0, "amp": (0.0003, decay, 0.0, 0.006), "cutoff": bright, "res": 1.1, "mode": 1,
+            "velsens": 0.5}
+
+
+def rim(decay=0.03):
+    # a rimshot: a short low knock under a noise crack
+    return {"osc": [(TRI, semis(420), 0.5)], "noise": 0.8, "amp": (0.0003, decay, 0.0, 0.01), "cutoff": 2400,
+            "res": 0.9, "mode": 1, "velsens": 0.6}
+
+
 def cowbell(decay=0.18):
     return {"osc": [(PULSE, semis(540), 0.6), (PULSE, semis(800), 0.6)], "amp": (0.0005, decay, 0.1, 0.05),
             "cutoff": 2600, "res": 2.0, "mode": 1}
@@ -917,121 +929,168 @@ def sugar():
 
 
 def final():
-    """Crumble!: the last thirty seconds, D minor rave against an orchestra, with a clock ticking down.
-    A hoover, rave organ stabs and a hard 909 style kit with breaks, set against strings, choir,
-    timpani and orchestra hits. Shaped around the clock: two bars of ticking, an eight bar drop, one
-    bar where time freezes and only the clock and the choir are left, six bars a semitone up on the
-    four on the floor, and six more another semitone up with everything."""
-    s = Song(176, 23)
-    s.room = (1.8, 0.45, 0.22)
-    s.color = [("drive", 1.3)]
-    s.channel(0, 48, 100, 40, level=-21)    # strings ostinato
-    s.channel(1, 52, 100, 64, level=-20)    # choir
-    s.channel(2, 47, 100, 64, level=-17)    # timpani
-    s.channel(3, 55, 100, 64, level=-17)    # orchestra hit
-    s.kit("909", {
+    """Crumble!: the last thirty seconds, D minor electro at 172, all synth. Built as one long climb
+    with the beat switching under it: a ticking countdown with a muffled arp, a half time build where
+    the arp opens up and the singers tease the hook, a snare roll that speeds up into a gap, the drop
+    on jungle breaks with a hoover hook and a reese bass, a tape stop where time freezes and the beat
+    turns into a trap bar with sliding 808s, then the second drop a whole step up on a hardcore four on
+    the floor, the hook now in sixteenths with the singers harmonising and a brighter lead on top."""
+    s = Song(172, 24)
+    s.room = (1.5, 0.35, 0.18)
+    s.color = [("drive", 1.25)]
+    s.kit("crumble", {
         "kick": (kick(52, punch=34, decay=0.26, click=0.1, drive=1.2), -13, {}),
+        "boom": (kick(44, punch=12, decay=0.9, click=0.0, drive=1.0), -14, {}),
         "snare": (snare(220, decay=0.15, snap=1.2, tone=0.5, bright=7000), -17, {}),
+        "clap": (clap(0.17, 1300), -19, {}),
         "hat": (hat(0.03, bright=9000), -25, {}),
         "ohat": (hat(0.2, bright=8000, metal=0.9), -24, {}),
         "ride": (hat(0.5, bright=5500, metal=1.0), -27, {}),
         "crash": (hat(1.0, bright=4500, metal=1.0), -23, {}),
-        "tick": (block(2100, 0.025), -19, {}),
-        "tock": (block(1500, 0.03), -19, {}),
+        "tick": (click(3400, 0.01), -22, {}),
+        "tock": (click(1700, 0.016), -22, {}),
     })
+    s.synth("arp", {"osc": [(PULSE, 0, 1.0), (SAW, 12, 0.3)], "pw": 0.3, "amp": (0.001, 0.12, 0.0, 0.06),
+                    "cutoff": 6000, "lfo": (48, 4.2, 0), "res": 2.2, "filt": (0.001, 0.06, 0.0, 0.05),
+                    "env_oct": 1.0}, -21, {"delay": (0.3, 0.75, 0.35), "hp": 200})
+    s.synth("pulse", {"osc": [(SINE, 0, 1.0)], "pitch": (7, 0.03), "amp": (0.001, 0.3, 0.0, 0.1)}, -18, {})
+    s.synth("bass", {"osc": [(SAW, 0, 1.0)], "sub": 0.6,
+                     "amp": (0.002, 0.2, 0.6, 0.04), "cutoff": 260, "env_oct": 2.6, "filt": (0.001, 0.12, 0.0, 0.05),
+                     "res": 1.5, "drive": 0.6}, -17, {})
+    s.synth("reese", {"osc": [(SAW, 0, 1.0), (SAW, 0.18, 1.0), (SAW, -12, 0.5)], "sub": 0.7,
+                      "amp": (0.005, 0.3, 0.9, 0.06), "cutoff": 700, "res": 1.3, "lfo": (8, 1.4, 0),
+                      "drive": 1.0}, -16, {"sidechain": (0.35, 0.3)})
     s.synth("hoover", {"osc": [(SAW, 0, 1.0), (PULSE, -12, 0.6)], "unison": 5, "detune": 45, "spread": 1.0,
                        "pwm": 0.3, "pwm_rate": 2.0, "pitch": (-10, 0.09), "glide": 0.06,
-                       "amp": (0.01, 0.3, 0.9, 0.1), "cutoff": 2400, "res": 1.2, "drive": 0.8},
-            -17, {"hp": 60, "width": 1.2})
+                       "amp": (0.01, 0.3, 0.9, 0.1), "cutoff": 2600, "res": 1.2, "drive": 0.8},
+            -17, {"hp": 120, "width": 1.2, "delay": (0.12, 0.75, 0.25)})
+    s.synth("lead", {"osc": [(SAW, 0, 1.0), (SAW, 12, 0.3)], "unison": 7, "detune": 30, "spread": 0.8,
+                     "amp": (0.003, 0.2, 0.75, 0.08), "cutoff": 4200, "keytrack": 0.3, "res": 1.0, "glide": 0.03,
+                     "vib": (6, 18, 0.2)}, -18, {"hp": 250, "delay": (0.2, 0.75, 0.3)})
     s.synth("organ", {"osc": [(PULSE, 0, 0.6), (PULSE, 12, 0.4), (SINE, 19, 0.3)], "amp": (0.002, 0.18, 0.0, 0.06),
                       "cutoff": 3500}, -21, {"sidechain": (0.5, 0.3), "hp": 200})
-    s.synth("subdrop", {"osc": [(SINE, 0, 1.0)], "amp": (0.002, 1.2, 0.0, 0.3), "pitch": (24, 0.18),
-                        "cutoff": 3000, "drive": 0.5}, -17, {})
-    s.synth("rise", riser(4 * 60 / 176), -23, {"hp": 200})
-    s.lift(11, 16, 1)
-    s.lift(17, 22, 2)
+    s.synth("stab", {"osc": [(SAW, 0, 1.0)], "unison": 7, "detune": 38, "spread": 0.9,
+                     "amp": (0.003, 0.2, 0.3, 0.12), "filt": (0.001, 0.16, 0.15, 0.1), "cutoff": 900, "env_oct": 2.6,
+                     "res": 0.9}, -20, {"sidechain": (0.7, 0.35), "hp": 180, "width": 1.3})
+    vox = {"osc": [(PULSE, 0, 1.0), (SAW, 0, 0.6)], "pw": 0.3, "formant": "ua", "amp": (0.003, 0.1, 0.7, 0.05),
+           "pitch": (-1.5, 0.03), "vib": (6, 15, 0.08), "drive": 0.3}
+    s.synth("vox", vox, -19, {"delay": (0.25, 0.75, 0.3), "hp": 250})
+    s.synth("vox2", {**vox, "formant": "ia"}, -23, {"hp": 250, "width": 1.4})
+    s.synth("dive", {"osc": [(SAW, 0, 1.0)], "unison": 5, "detune": 30, "spread": 1.0, "pitch": (24, 0.35),
+                     "amp": (0.002, 1.0, 0.0, 0.2), "cutoff": 3000}, -19, {"hp": 80})
+    s.synth("808", {"osc": [(SINE, 0, 1.0)], "amp": (0.002, 0.6, 0.6, 0.1), "glide": 0.08, "drive": 1.2,
+                    "pitch": (5, 0.02)}, -15, {})
+    s.synth("rise", riser(8 * 60 / 172), -23, {"hp": 200})
+    s.synth("rise1", riser(4 * 60 / 172), -24, {"hp": 200})
+    s.synth("impact", {"osc": [(SINE, 0, 1.0)], "amp": (0.002, 1.2, 0.0, 0.3), "pitch": (24, 0.18),
+                       "cutoff": 3000, "drive": 0.5}, -16, {})
+    s.lift(18, 23, 2)
 
-    intro = ["Dm", "A7"]
-    drop = ["Dm", "Bb", "C", "A7", "Dm", "Bb", "Gm A7", "Dm"]
-    freeze = ["A7"]
-    climb = ["Bb", "C", "Am", "Dm", "Gm", "A7"]
-    last = ["Dm", "Bb", "C", "A7", "Gm A7", "Dm"]
-    prog = intro + drop + freeze + climb + last
+    count = ["Dm", "A7"]
+    build = ["Dm", "Bb", "Gm", "A7"]
+    roll = ["Bb", "A7"]
+    drop = ["Dm", "Bb", "F", "C", "Gm", "Bb", "A", "A7"]
+    freeze = ["Dm", "Gm A7"]
+    climax = ["Dm", "Bb", "F", "C", "Gm A", "Bb C"]
+    prog = count + build + roll + drop + freeze + climax
 
-    riff = ["D4 - - A3 D4 - F4 -", "F4 - - D4 Bb3 - D4 -", "E4 - - C4 G3 - C4 E4", "C#4 - - A3 E4 - C#4 -",
-            "D4 - - A3 D4 - F4 A4", "Bb4 - - F4 D4 - F4 -", "G4 - Bb4 - A4 - C#5 -", "D5 - - - A4 - - -"]
-    climb_mel = ["F5 - - D5 F5 - Bb5 -", "G5 - - E5 G5 - C6 -", "A5 - - - E5 - C5 -", "D5 - F5 - A5 - D6 -",
-                 "Bb5 - A5 - G5 - D5 -", "C#5 - E5 - A5 - C#6 -"]
-    last_mel = ["A5 - - - D6 - - -", "D6 - C6 - Bb5 - F5 -", "G5 - - - C6 - E6 -", "E6 - - - C#6 - A5 -",
-                "Bb5 - - - C#6 - - -", "D6 - - - - - - -"]
-    for i in range(8):
-        s.line("hoover", 2 + i, riff[i], 104, legato=0.95)
-    for i in range(6):
-        s.line(1, 11 + i, climb_mel[i], 100, legato=0.9)
-        s.line("hoover", 11 + i, climb_mel[i], 96, legato=0.95, octave=-1)
-        s.line(1, 17 + i, last_mel[i], 108, legato=0.9)
-        s.line("hoover", 17 + i, last_mel[i], 104, legato=0.95, octave=-1)
-    s.line("hoover", 1, ". . . . A3 - E4 -", 100, legato=0.95)
+    hook = ["D5 - F5 A5 - G5 F5 E5", "D5 - - - Bb4 - D5 F5", "C5 - F5 A5 - G5 F5 E5", "E5 - - - C5 - E5 G5",
+            "Bb5 - A5 G5 - F5 G5 A5", "F5 - D5 Bb4 - D5 F5 Bb5", "A5 - - - E5 - C#5 E5", "A5 G5 F5 E5 C#5 - - -"]
+    hook16 = ["D5 . D5 F5 . A5 . D6 - - C6 - A5 - F5 -", "D5 . D5 F5 . Bb5 . D6 - - C6 - Bb5 - F5 -",
+              "C5 . C5 F5 . A5 . C6 - - Bb5 - A5 - F5 -", "E5 . E5 G5 . C6 . E6 - - D6 - C6 - G5 -",
+              "Bb5 - A5 - G5 - Bb5 - C#6 - - - E6 - - -", "F6 - - - D6 - - - E6 - G6 - C6 - E6 -"]
 
-    for bar, chord in enumerate(prog):
-        main = chord.split()[0]
-        root = bass_root(main, 1) + 12
+    # ---- countdown: the clock, a pulse on every beat and the arp behind a closed filter
+    # ---- build: half time, the arp opens, bass arrives, the singers tease the first bar of the hook
+    for bar in range(0, 8):
+        chord = prog[bar]
+        s.arp("arp", bar, chord, [0, 1, 2, 3, 2, 1], 74, 84 + bar * 3)
         if bar < 2:
-            # the clock and a swell of strings
-            for j in range(16):
-                s.note(0, bar * 4 + j * 0.25, 0.2, voicing(main, 62)[j % 3], 50 + bar * 16 + j * 2)
-            s.note(2, bar * 4, 1, root, 100)
-            continue
-        if bar == 10:
-            s.pad(1, bar, chord, 64, 100)
-            continue
-        tones = voicing(main, 62)
-        for j in range(16):
-            k = tones[[0, 0, 2, 0, 1, 0, 2, 0][j % 8]] + (12 if j % 8 == 2 else 0)
-            s.note(0, bar * 4 + j * 0.25, 0.2, k, 92 if j % 4 == 0 else 70)
-        s.chords("organ", bar, chord, [1, 3, 5, 7], 0.25, 67, 100)
-        s.note(2, bar * 4, 1.5, root, 108)
-        if bar % 4 == 3:
-            for j in range(8):
-                s.note(2, bar * 4 + 2 + j * 0.25, 0.25, root, 70 + j * 6)
-        if bar in (2, 11) or bar >= 17:
-            for k in voicing(main, 60):
-                s.note(3, bar * 4, 1, k, 108)
-        if bar >= 17:
-            s.pad(1, bar, chord, 60, 80)
-    for at in (2, 11, 17):
-        s.note("subdrop", at * 4, 4, bass_root("D", 1), 120)
-    s.note("rise", 9 * 4, 4, 60, 120)
-    s.note("rise", 16 * 4, 4, 60, 120)
+            for b in range(4):
+                s.note("pulse", bar * 4 + b, 0.3, bass_root(chord.split()[0], 1), 100)
+        elif bar < 6:
+            if bar >= 4:
+                s.bass("bass", bar, chord, "R . R 8 . R 8 .", 104)
+            else:
+                s.bass("bass", bar, chord, "R - - - . . . .", 100)
+    s.line("vox", 4, "D5 - F5 A5 - . . .", 96)
+    s.line("vox", 5, "D5 - F5 Bb5 - . . .", 96)
+    s.line("vox", 6, "D5 - F5 A5 - G5 F5 E5", 100)
+    s.line("vox", 7, "D5 - - - . . . .", 100)
+    s.line("lead", 7, ". . . . . . . . D4 E4 F4 G4 A4 Bb4 C5 C#5", 92, step=0.125)
+    s.note("rise", 6 * 4, 8, 60, 120)
 
-    for bar in range(23):
+    # ---- drop: jungle breaks, reese, hoover hook, organ stabs
+    for i in range(8):
+        bar = 8 + i
+        chord = prog[bar]
+        s.line("hoover", bar, hook[i], 104, legato=0.95)
+        for start, ch, span in s.spans(bar, chord):
+            s.note("reese", start, span * 0.98, bass_root(ch, 1) + 12, 106)
+        s.chords("organ", bar, chord, [1, 3, 5, 7] if i < 4 else [1, 2, 3, 5, 6, 7], 0.25, 67, 98)
+        if i % 2 == 1:
+            s.hits("vox2", bar, chord, "........ ....4.2.", 74, 88, dur=0.15)
+    s.note("impact", 8 * 4, 4, midi("D1"), 120)
+
+    # ---- freeze: the whole track dives like a tape stopping, then one bar of trap with sliding 808s
+    s.note("dive", 16 * 4, 3, midi("D3"), 120)
+    s.note("dive", 16 * 4, 3, midi("A3"), 110)
+    s.line("vox", 16, ". . . . . . D6 - ", 104, legato=0.6)
+    s.line("808", 17, "D2 - - G2 - - A1 - - - D2 - A2 - G2 -", 110, step=0.25, legato=1.0)
+    s.note("rise1", 17 * 4, 4, 60, 120)
+
+    # ---- second drop, a whole step up: hardcore beat, the hook in sixteenths, singers in harmony
+    for i in range(6):
+        bar = 18 + i
+        chord = prog[bar]
+        s.line("lead", bar, hook16[i], 104, step=0.25, legato=0.9)
+        s.line("vox", bar, hook16[i], 90, step=0.25, legato=0.6, octave=-1)
+        s.line("hoover", bar, hook16[i].split()[0] + " - - - - - - -", 96, legato=0.95, octave=-1)
+        s.chords("stab", bar, chord, [1, 3, 5, 7], 0.22, 67, 100)
+        s.bass("bass", bar, chord, "R 8 R 8 R 8 R 8", 112)
+        s.hits("vox2", bar, chord, "..2...2...2...2.", 79, 80, dur=0.12)
+    s.note("impact", 18 * 4, 4, midi("D1"), 120)
+
+    for bar in range(24):
         if bar < 2:
             p = {"tick": "x...x...x...x...", "tock": "..x...x...x...x."}
             if bar == 1:
-                p["snare"] = "........x.x.xxxx"
-            s.beat(bar, p, "909")
-        elif bar < 10:
-            p = {"kick": "X.X.......X..X..", "snare": "....X..o.o..X..o", "hat": "x.x.x.x.x.x.x.x.",
+                p["boom"] = "............X..."
+        elif bar < 6:
+            p = {"kick": "X.........X.....", "snare": "........X.......", "hat": "x.x.x.x.x.x.x.x.",
                  "tick": "x...x...x...x..."}
+            if bar >= 4:
+                p.update(hat="xoxoxoxoxoxoxoxo", snare="........X.....o.", kick="X.........X..X..")
+        elif bar == 6:
+            p = {"kick": "X.......X.......", "snare": "x...x...x...x...", "hat": "x.x.x.x.x.x.x.x."}
+        elif bar == 7:
+            s.beat(bar, {"snare": "x.x.x.x.x.x.x.x.xxxxxxxxxxxx...."}, "crumble", step=0.125)
+            continue
+        elif bar < 16:
+            p = {"kick": "X.X.......X..X..", "snare": "....X..o.o..X..o", "hat": "x.x.x.x.x.x.x.x.",
+                 "ride": "x...x...x...x..."}
             if bar % 2:
                 p.update(kick="X.........XX....", snare="....X..o.o.oX.o.")
-            if bar == 2:
+            if bar in (8, 12):
                 p["crash"] = "X..............."
-            s.beat(bar, p, "909")
-        elif bar == 10:
-            s.beat(bar, {"tick": "x...x...x...x...", "tock": "..x...x...x...x."}, "909")
-        else:
-            p = {"kick": "X...X...X...X...", "snare": "..o.X..o.o..X.o.", "ohat": "..X...X...X...X.",
-                 "hat": "x.x.x.x.x.x.x.x."}
-            if bar >= 17:
-                p["ride"] = "x.x.x.x.x.x.x.x."
-                if bar % 2 == 1:
-                    p["crash"] = "X..............."
-            if bar in (11, 17):
-                p["crash"] = "X..............."
-            if bar in (16, 22):
+            if bar == 15:
                 p["snare"] = "....X...xxxxXXXX"
-            s.beat(bar, p, "909")
+        elif bar == 16:
+            p = {"crash": "X...............", "tick": "........x...x...", "tock": "..........x...x."}
+        elif bar == 17:
+            s.beat(bar, {"boom": "X...............................", "clap": "................X...............",
+                         "hat": "x...x...x.x.x.x.x...x...xxxxxxxx"}, "crumble", step=0.125)
+            continue
+        else:
+            p = {"kick": "X...X...X...X...", "clap": "....X.......X...", "ohat": "..X...X...X...X.",
+                 "hat": "x.x.x.x.x.x.x.x.", "snare": "..o....o.o....o."}
+            if bar % 2 == 0:
+                p["crash"] = "X..............."
+            if bar == 23:
+                s.beat(bar, {"kick": "X.......X.......", "snare": "........x.x.x.x.xxxxxxxxXXXXXXXX"},
+                       "crumble", step=0.125)
+                continue
+        s.beat(bar, p, "crumble")
     return s
 
 
