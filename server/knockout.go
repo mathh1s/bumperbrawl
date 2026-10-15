@@ -52,9 +52,22 @@ func (g *Game) startKnockoutRound() {
 	g.qualify = 0
 	if g.final {
 		g.mode = modeLast
-	} else {
-		g.qualify = qualifyCount(n)
+		return
 	}
+	// a team round can't say who of the team qualifies, so knockouts swap Blob Ball for another mode
+	if g.mode == modeBall {
+		var solo []int
+		for _, m := range g.modes {
+			if m != modeBall {
+				solo = append(solo, m)
+			}
+		}
+		g.mode = modeBrawl
+		if len(solo) > 0 {
+			g.mode = solo[rand.IntN(len(solo))]
+		}
+	}
+	g.qualify = qualifyCount(n)
 }
 
 // endKnockoutRound sends the best of the field through. Equal scores at the cutoff are settled

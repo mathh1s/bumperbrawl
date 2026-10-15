@@ -23,7 +23,7 @@ const (
 )
 
 func (g *Game) sweeperActive() bool {
-	return g.phase == phasePlay && g.phaseT <= sweepStart
+	return g.phase == phasePlay && g.phaseT <= sweepStart && g.mode != modeBall
 }
 
 func (g *Game) resetSweeper() {

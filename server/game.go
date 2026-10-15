@@ -84,6 +84,7 @@ type Player struct {
 	Ready      bool
 	Elim       bool // knocked out of a knockout match
 	OutAt      float64
+	Team       int
 	Stun       float64
 	Falling    bool
 	FallT      float64
@@ -145,6 +146,9 @@ type Game struct {
 	final    bool
 	qualify  int
 	koDone   bool
+
+	ball      Ball
+	teamGoals [3]int
 }
 
 func NewGame(code string, cfg Config) *Game {
@@ -182,7 +186,7 @@ func (g *Game) startRound() {
 	g.clearCrates()
 	g.resetSweeper()
 	for _, p := range g.players {
-		p.Score, p.Lives, p.Out = 0, 0, false
+		p.Score, p.Lives, p.Out, p.Team = 0, 0, false, 0
 		g.respawn(p)
 	}
 	switch g.mode {
@@ -192,6 +196,8 @@ func (g *Game) startRound() {
 		g.startHill()
 	case modeCoins:
 		g.startCoins()
+	case modeBall:
+		g.startBall()
 	}
 	for _, p := range g.players {
 		if p.Elim {
@@ -234,6 +240,10 @@ func (g *Game) arenaRadius() float64 {
 	case phaseEnd:
 		return arenaMin
 	case phaseLobby:
+		return arenaMax
+	}
+	// the goals sit on the edge, so a ball pitch never crumbles
+	if g.mode == modeBall {
 		return arenaMax
 	}
 	elapsed := g.cfg.RoundTime - g.phaseT
@@ -336,6 +346,7 @@ func (g *Game) step(dt float64) {
 	g.updateCrates(dt)
 	g.updateHill(dt)
 	g.updateCoins(dt)
+	g.updateBall(dt)
 
 	for _, p := range g.players {
 		// jumps and ground pounds are airborne, so leaving the island only counts once they land
@@ -517,6 +528,15 @@ func (g *Game) thinkBots(dt float64) {
 		}
 		b.think = 0.15 + rand.Float64()*0.2
 
+		if g.mode == modeBall && g.phase == phasePlay {
+			dx, dz, dash := g.botBallInput(b)
+			g.botSteer(b, dx, dz)
+			if dash && b.DashCD == 0 && !b.Charging {
+				b.WantDash = true
+			}
+			continue
+		}
+
 		var target *Player
 		best, pick := math.Inf(1), math.Inf(1)
 		for _, o := range g.players {
@@ -553,17 +573,7 @@ func (g *Game) thinkBots(dt float64) {
 		}
 		dx += (rand.Float64() - 0.5) * 3
 		dz += (rand.Float64() - 0.5) * 3
-
-		fromCenter := math.Hypot(b.X, b.Z)
-		edgeDanger := fromCenter - (g.radius - 2.5)
-		if edgeDanger > 0 {
-			w := edgeDanger * 3
-			dx -= b.X / fromCenter * w
-			dz -= b.Z / fromCenter * w
-		}
-		if l := math.Hypot(dx, dz); l > 0 {
-			b.InX, b.InZ = dx/l, dz/l
-		}
+		edgeDanger := g.botSteer(b, dx, dz)
 
 		if b.Charging || b.DashCD > 0 || target == nil || edgeDanger >= -1 {
 			continue
@@ -576,6 +586,22 @@ func (g *Game) thinkBots(dt float64) {
 			b.botRelease = 0.3 + rand.Float64()*0.6
 		}
 	}
+}
+
+// botSteer points a bot along (dx, dz), bending away from the edge; it returns how far past
+// the safe zone the bot is
+func (g *Game) botSteer(b *Player, dx, dz float64) float64 {
+	fromCenter := math.Hypot(b.X, b.Z)
+	edgeDanger := fromCenter - (g.radius - 2.5)
+	if edgeDanger > 0 {
+		w := edgeDanger * 3
+		dx -= b.X / fromCenter * w
+		dz -= b.Z / fromCenter * w
+	}
+	if l := math.Hypot(dx, dz); l > 0 {
+		b.InX, b.InZ = dx/l, dz/l
+	}
+	return edgeDanger
 }
 
 // ==== players and clients ====
@@ -591,6 +617,8 @@ func (g *Game) newPlayer(name string, color, hat int, bot bool) *Player {
 		g.bench(p)
 	case g.phase == phasePlay && g.mode == modeLast:
 		g.joinLast(p)
+	case g.phase == phasePlay && g.mode == modeBall:
+		g.joinBall(p)
 	}
 	return p
 }
@@ -758,7 +786,7 @@ func (g *Game) rosterMsg() []byte {
 }
 
 func (g *Game) snapshot() []byte {
-	ps := make([][11]float64, 0, len(g.players))
+	ps := make([][12]float64, 0, len(g.players))
 	for _, p := range g.players {
 		flags := 0
 		if p.DashT > 0 {
@@ -789,10 +817,10 @@ func (g *Game) snapshot() []byte {
 		if p.DashCDMax > 0 {
 			cd = p.DashCD / p.DashCDMax
 		}
-		ps = append(ps, [11]float64{
+		ps = append(ps, [12]float64{
 			float64(p.ID), r2(p.X), r2(p.Z), r2(p.Y), r2(p.Angle),
 			float64(flags), r2(cd), float64(p.Score), r2(p.ChargeT / chargeMax), r2(p.PowT),
-			float64(p.Wins),
+			float64(p.Wins), float64(p.Team),
 		})
 	}
 	msg := map[string]any{
@@ -805,6 +833,9 @@ func (g *Game) snapshot() []byte {
 	}
 	if g.mode == modeCoins && g.phase == phasePlay {
 		msg["co"] = g.coinList()
+	}
+	if g.mode == modeBall && g.phase == phasePlay {
+		msg["bl"] = g.ballState()
 	}
 	if g.sweepOn {
 		msg["sw"] = [2]float64{r2(g.sweepA), r2(g.sweepHalf())}

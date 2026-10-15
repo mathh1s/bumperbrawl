@@ -13,6 +13,7 @@ const MOUTH_O = new THREE.SphereGeometry(0.075, 10, 8);
 const CHEEK = new THREE.CircleGeometry(0.085, 16);
 const FOOT = new THREE.SphereGeometry(0.21, 12, 8);
 const MARK = new THREE.RingGeometry(0.95, 1.18, 40).rotateX(-Math.PI / 2);
+const TEAM_RING = new THREE.RingGeometry(1.2, 1.45, 40).rotateX(-Math.PI / 2);
 
 const OUTLINE = new THREE.MeshBasicMaterial({ color: '#2d2440', side: THREE.BackSide });
 const WHITE = new THREE.MeshBasicMaterial({ color: '#ffffff' });
@@ -269,6 +270,18 @@ export class Blob {
     this.jellyV = 0;
   }
 
+  // a ring in the team colour under the blob, or none outside team modes
+  setTeam(color) {
+    if (color && !this.teamRing) {
+      this.teamRing = new THREE.Mesh(TEAM_RING, new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, depthWrite: false }));
+      this.teamRing.position.y = 0.03;
+      this.group.add(this.teamRing);
+    }
+    if (!this.teamRing) return;
+    this.teamRing.visible = !!color;
+    if (color) this.teamRing.material.color.set(color);
+  }
+
   setCrown(on, ramp) {
     if (on && !this.crown) {
       this.crown = makeCrown(ramp);
@@ -392,6 +405,7 @@ export class Blob {
     this.group.removeFromParent();
     this.mat.dispose();
     this.footMat.dispose();
+    this.teamRing?.material.dispose();
     for (const part of [this.hat, this.crown]) {
       part?.traverse((o) => {
         if (o.isMesh && o.material !== INK) {

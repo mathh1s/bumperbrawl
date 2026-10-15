@@ -6,9 +6,10 @@ import { Podium } from './podium.js';
 import { Sweeper } from './sweeper.js';
 import { HillRing } from './hill.js';
 import { Coins } from './coins.js';
+import { BallPitch } from './ball.js';
 import { FX } from './fx.js';
 import { Crates, POWERS } from './crates.js';
-import { modeOf, OUT } from './modes.js';
+import { modeOf, OUT, TEAMS } from './modes.js';
 import { Input } from './input.js';
 import { initAudio, sfx } from './audio.js';
 import { Predictor } from './predict.js';
@@ -43,6 +44,7 @@ const podium = new Podium(ramp);
 const sweeper = new Sweeper(scene, ramp, fx);
 const hillRing = new HillRing(scene);
 const coins = new Coins(scene, ramp);
+const pitch = new BallPitch(scene, ramp);
 const lastScores = new Map();
 const arrowPos = new THREE.Vector3();
 sweeper.onLand = () => {
@@ -156,10 +158,10 @@ function onSnapshot(m) {
 
   const players = new Map();
   for (const a of m.p) {
-    players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0, wins: a[10] ?? 0 });
+    players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0, wins: a[10] ?? 0, team: a[11] ?? 0 });
   }
   const t = m.now * 1000 + clockOffset;
-  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, fm: m.fm ?? 0, kq: m.kq ?? 0, fin: !!m.fin, hl: m.hl, co: m.co };
+  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, fm: m.fm ?? 0, kq: m.kq ?? 0, fin: !!m.fin, hl: m.hl, co: m.co, bl: m.bl };
   snaps.push(snap);
   if (snaps.length > 60) snaps.shift();
   latest = snap;
@@ -199,10 +201,16 @@ function sample(rt) {
       score: pb.score,
       ch: pa.ch + (pb.ch - pa.ch) * k,
       pw: pb.pw,
+      team: pb.team,
     });
   }
   const sw = a.sw && b.sw ? [lerpAngle(a.sw[0], b.sw[0], k), a.sw[1] + (b.sw[1] - a.sw[1]) * k] : b.sw;
-  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw, sw, hl: b.hl, co: b.co };
+  // the ball snaps on kickoff instead of sliding back from the goal
+  let bl = b.bl;
+  if (a.bl && b.bl && !a.bl[3] && !b.bl[3] && Math.hypot(b.bl[0] - a.bl[0], b.bl[1] - a.bl[1]) < 4) {
+    bl = [a.bl[0] + (b.bl[0] - a.bl[0]) * k, a.bl[1] + (b.bl[1] - a.bl[1]) * k, a.bl[2] + (b.bl[2] - a.bl[2]) * k, 0, b.bl[4], b.bl[5]];
+  }
+  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw, sw, hl: b.hl, co: b.co, bl };
 }
 
 // ==== events ====
@@ -305,6 +313,27 @@ function fireEvents(rt, view) {
         coins.spill(e.ids, e.x, e.z);
         if (e.i === myId && joined) banner(`-${e.ids.length}<small>your coins went flying</small>`, 1400);
         break;
+      case 'goal': {
+        const team = TEAMS[e.t];
+        const by = e.by ? nameOf(e.by) : null;
+        fx.burst(e.x, 1.5, e.z, { colors: [team.color, '#ffffff', '#ffd43b'], n: 40, speed: 7, up: 8, size: 0.16, life: 1.2 });
+        addFeed(by ? `<b>${esc(by)}</b> ${e.own ? 'scored an own goal' : 'scored'} for ${team.name}` : `Goal for ${team.name}`);
+        if (!joined) break;
+        const mine = latest?.players.get(myId)?.team === e.t;
+        banner(`GOAL!<small>${by ? `${esc(by)} for ` : ''}${team.name}</small>`, 2000);
+        sfx.start();
+        if (mine) sfx.crown();
+        shake = 0.4;
+        break;
+      }
+      case 'bw':
+        fx.dust(e.x, 0.6, e.z);
+        if (joined && me && Math.hypot(me.x - e.x, me.z - e.z) < 6) sfx.bump(e.p * 2, false);
+        break;
+      case 'bsp':
+        fx.splash(e.x, e.z, 1.6);
+        if (joined) sfx.splash(false);
+        break;
       case 'hm':
         fx.ring(e.x, e.z, '#ffffff', 3.5);
         break;
@@ -325,7 +354,9 @@ function fireEvents(rt, view) {
         document.body.classList.remove('standings');
         const mode = modeOf(e.m);
         if (joined) {
-          banner(`<small>${roundLabel(e)}</small>${mode.name}<small>${mode.rule}</small>`, 3200);
+          const team = e.m === 4 ? TEAMS[latest?.players.get(myId)?.team] : null;
+          const side = team ? `<br>You're on <span style="color:${team.color}">${team.name}</span>` : '';
+          banner(`<small>${roundLabel(e)}</small>${mode.name}<small>${mode.rule}${side}</small>`, 3600);
           sfx.start();
         }
         break;
@@ -459,7 +490,8 @@ function updateHud(dt, view) {
   const crumbling = latest.ph === 0 && view && view.r < ARENA_MAX - 0.01;
   $('phase').textContent = latest.ph === 1
     ? (lastEnd?.mo ? (ROOM ? 'Lobby in' : 'New match in') : 'Next round')
-    : `${roundLabel({ r: latest.rn, of: latest.rm, fm: latest.fm, kq: latest.kq, fin: latest.fin })} · ${modeOf(latest.md).name}`;
+    : `${roundLabel({ r: latest.rn, of: latest.rm, fm: latest.fm, kq: latest.kq, fin: latest.fin })} · ${
+      latest.bl ? `Red ${latest.bl[4]} : ${latest.bl[5]} Blue` : modeOf(latest.md).name}`;
   $('timer').classList.toggle('crumble', !!crumbling);
 
   const rows = [...latest.players.entries()]
@@ -785,6 +817,7 @@ function frame(now) {
       // eliminated blobs disappear once they have splashed down
       b.group.visible = !!s && !(s.flags & OUT && s.y < -2);
       b.setCrown(id === view.cw, ramp);
+      b.setTeam(view.bl && s ? TEAMS[s.team]?.color : null);
     }
     if (view.ph !== 1 && (podium.active || !$('standings').hidden)) {
       podium.hide();
@@ -798,8 +831,10 @@ function frame(now) {
   sweeper.update(view?.sw, dt);
   hillRing.update(view?.hl, dt, t, (id) => roster.get(id)?.c ?? 0);
   coins.sync(view?.co, dt, t);
+  pitch.update(view?.bl, dt);
   if (view?.hl) popHillPoints(view);
-  pointToHill(view?.hl);
+  // the same edge arrow points at the ball when it is off screen
+  pointToHill(view?.hl ?? (view?.bl && !view.bl[3] ? [view.bl[0], view.bl[1]] : null));
   fx.update(dt);
   updateCamera(dt, view);
   updateHud(dt, view);

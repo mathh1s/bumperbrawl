@@ -27,6 +27,17 @@ export const MODES = {
     unit: (n) => `${n} coin${n === 1 ? '' : 's'}`,
     cell: (p) => `<span class="coin"></span>${p.score}`,
   },
+  4: {
+    name: 'Blob Ball',
+    rule: 'Two teams, one ball. Bonk it into the other team\'s goal.',
+    unit: (n) => `${n} goal${n === 1 ? '' : 's'}`,
+    cell: (p) => `<span class="team" style="background:${TEAMS[p.team]?.color ?? '#ccc'}"></span>${p.score}`,
+  },
+};
+
+export const TEAMS = {
+  1: { name: 'Red', color: '#ff4d4d' },
+  2: { name: 'Blue', color: '#3b8cff' },
 };
 
 export function modeOf(id) {
