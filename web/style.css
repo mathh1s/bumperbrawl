@@ -112,6 +112,19 @@ html, body {
 }
 .hatpick button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
 
+#hatName .lock { margin-left: 6px; font-size: 14px; }
+.unlock { margin-top: -6px; background: var(--sun); }
+.unlock:disabled { background: #fff; opacity: 0.85; cursor: default; }
+.crowns {
+  font: 400 20px "Lilita One", var(--font);
+  color: var(--ink);
+  background: var(--sun);
+  border: 3px solid var(--ink); border-radius: 14px;
+  box-shadow: 0 3px 0 var(--ink);
+  padding: 3px 12px 2px;
+}
+.crowns b { font-weight: 400; }
+
 /* the name sits on a sticker plate under the blob */
 #name {
   width: min(300px, 100%);

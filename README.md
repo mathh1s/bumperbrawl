@@ -20,6 +20,7 @@ A small online 3D party brawler. Everyone is a squishy blob on a floating hex is
 - In the last 30 seconds a giant log sweeps the island; jump it or get swept away
 - The leader wears a crown worth 2 points to whoever knocks them off; rounds end on a podium
 - Match awards: silly titles on the final podium (Bonk machine, Professional faller, Golden boot, Own goal royalty and more), one per player
+- Crowns: finishing a match earns crowns (more for round wins, match wins and awards), spent in the menu on eight unlockable hats. Private rooms only pay out with at least two people in them, so bot rooms can't be farmed
 - Private rooms: "Create a room" makes a room at `/?room=CODE` to share, and friends can type the code (or paste the link) into the menu to join. The menu shows who is already in a room before you join. It opens in a lobby that lists who joined and who is ready; the host (first one in) picks rounds, round length, bots and modes, and the match starts when everyone is ready or the host starts it. Private rooms can also play a Knockout match: after each round only the best 60% go through, the eliminated watch, and the last three or fewer play a Last Blob Standing final. After the match the room goes back to the lobby. The host can remove players. Empty rooms close after a minute
 
 ## Run with Docker
@@ -90,6 +91,7 @@ server/  game.go   simulation, rounds, bots, snapshots
          room.go      private room lobby: host, ready checks, settings
          profiles.go  ratings, profile file, leaderboard
          awards.go    match stats and end-of-match awards
+         shop.go      crowns, hat prices and unlocks
          knockout.go  knockout match format
          mode_ball.go Blob Ball: teams, ball physics, goals, bot play
          mode_tiles.go Hex Drop: tile grid, cracking and regrowing tiles, bot footwork

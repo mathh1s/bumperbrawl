@@ -60,6 +60,7 @@
           <span id="hatName">Sprout</span>
           <button type="button" id="hatNext" aria-label="Next hat">›</button>
         </div>
+        <button type="button" id="unlockBtn" class="chip unlock" hidden></button>
         <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false" aria-label="Your name">
         <div id="colors" role="group" aria-label="Colour"></div>
       </section>
@@ -90,6 +91,7 @@
       </section>
 
       <footer class="menubar">
+        <span id="crowns" class="crowns" title="Crowns: earn them by finishing matches, spend them on hats">👑 <b>0</b></span>
         <button type="button" id="ranksBtn" class="chip">Leaderboard <span id="myRank"></span></button>
         <p class="keys"><kbd>WASD</kbd> move <kbd>Shift</kbd> dash, hold to charge <kbd>Space</kbd> jump <kbd>1–8</kbd> emotes</p>
       </footer>

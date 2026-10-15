@@ -69,12 +69,21 @@ func main() {
 		}
 		json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&body)
 		w.Header().Set("Content-Type", "application/json")
-		prof, pos, ok := store.rank(body.K)
-		if !ok {
-			json.NewEncoder(w).Encode(map[string]any{"rated": false})
+		json.NewEncoder(w).Encode(store.summary(body.K))
+	})
+	mux.HandleFunc("POST /api/buy", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			K   string `json:"k"`
+			Hat int    `json:"hat"`
+		}
+		json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&body)
+		w.Header().Set("Content-Type", "application/json")
+		if _, err := store.buy(body.K, body.Hat); err != nil {
+			w.WriteHeader(http.StatusConflict)
+			json.NewEncoder(w).Encode(map[string]any{"error": err.Error()})
 			return
 		}
-		json.NewEncoder(w).Encode(map[string]any{"rated": true, "r": int(prof.Rating + 0.5), "m": prof.Matches, "w": prof.Wins, "pos": pos})
+		json.NewEncoder(w).Encode(store.summary(body.K))
 	})
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) { lobby.serveWS(w, r, origins) })
 

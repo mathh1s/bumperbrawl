@@ -33,7 +33,7 @@ const (
 	intermission = 8.0
 	maxHumans    = 16
 	paletteSize  = 8
-	hatCount     = 9
+	hatCount     = freeHats + 8
 )
 
 const (
@@ -256,6 +256,7 @@ func (g *Game) endRound() {
 		ev["ch"] = names(g.champions())
 		ev["top"] = g.matchPodium()
 		ev["aw"] = g.matchAwards()
+		g.payCrowns(g.champions(), ev["aw"].([]map[string]any))
 	}
 	g.events = append(g.events, ev)
 }
@@ -749,13 +750,16 @@ func (g *Game) handle(c *Client, m inMsg) {
 		if hat < 0 || hat >= hatCount {
 			hat = 0
 		}
-		c.player = g.newPlayer(cleanName(m.N), color, hat, false)
-		if g.store != nil && !g.private {
-			c.player.Key, c.player.Rating = "", 0
-			if id, prof := g.store.lookup(m.K, c.player.Name); id != "" {
-				c.player.Key, c.player.Rating = id, prof.Rating
-			}
+		id, prof := "", Profile{}
+		if g.store != nil {
+			id, prof = g.store.lookup(m.K, cleanName(m.N))
 		}
+		// a locked hat falls back to the sprout rather than refusing the join
+		if hat >= freeHats && (id == "" || !g.store.owns(id, hat)) {
+			hat = 0
+		}
+		c.player = g.newPlayer(cleanName(m.N), color, hat, false)
+		c.player.Key, c.player.Rating = id, prof.Rating
 		g.syncBots()
 		g.queue(c, mustJSON(map[string]any{
 			"t": "welcome", "id": c.player.ID, "room": g.code, "private": g.private,

@@ -10,6 +10,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"sync"
 	"time"
@@ -34,6 +35,8 @@ type Profile struct {
 	Matches int       `json:"matches"`
 	Wins    int       `json:"wins"` // matches won
 	Seen    time.Time `json:"seen"`
+	Crowns  int       `json:"crowns"`
+	Owned   []int     `json:"owned,omitempty"` // unlocked hats
 }
 
 type Store struct {
@@ -248,4 +251,25 @@ func (s *Store) rank(key string) (Profile, int, bool) {
 		}
 	}
 	return *me, pos, true
+}
+
+// summary is what the menu shows about you: rank if rated, crowns and unlocked hats
+func (s *Store) summary(key string) map[string]any {
+	out := map[string]any{"rated": false, "crowns": 0, "owned": []int{}}
+	if len(key) < minKeyLen || len(key) > maxKeyLen {
+		return out
+	}
+	s.mu.Lock()
+	p, ok := s.m[hashKey(key)]
+	if ok {
+		out["crowns"] = p.Crowns
+		if p.Owned != nil {
+			out["owned"] = slices.Clone(p.Owned)
+		}
+	}
+	s.mu.Unlock()
+	if prof, pos, rated := s.rank(key); rated {
+		out["rated"], out["r"], out["m"], out["w"], out["pos"] = true, int(prof.Rating+0.5), prof.Matches, prof.Wins, pos
+	}
+	return out
 }

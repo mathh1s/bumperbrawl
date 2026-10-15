@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { World, makeRamp } from './world.js';
-import { Blob, PALETTE, HATS } from './blobs.js';
+import { Blob, PALETTE, HATS, FREE_HATS, HAT_PRICES } from './blobs.js';
 import { Preview } from './preview.js';
 import { Podium } from './podium.js';
 import { Sweeper } from './sweeper.js';
@@ -137,6 +137,11 @@ function onMessage(m) {
       addFeed(`Rating <b>${m.new}</b> (${d >= 0 ? '+' : ''}${d})${tierOf(m.old) !== t ? ` · now <b>${t.name}</b>!` : ''}`);
       break;
     }
+    case 'crowns':
+      profile.crowns = m.total;
+      $('crowns').querySelector('b').textContent = m.total;
+      addFeed(`+${m.got} 👑 for that match`);
+      break;
     case 'kicked':
       backToMenu('The host removed you from the room.');
       break;
@@ -651,10 +656,53 @@ try {
 } catch { /* storage blocked, keep random picks */ }
 
 const preview = new Preview($('preview'), ramp);
+// what you own comes from the server; until it answers only the free hats count
+let profile = { crowns: 0, owned: [] };
+const owns = (hat) => hat < FREE_HATS || profile.owned.includes(hat);
+
 function refreshLook() {
-  $('hatName').textContent = HATS[chosenHat];
+  const locked = !owns(chosenHat);
+  $('hatName').innerHTML = `${HATS[chosenHat]}${locked ? '<span class="lock" aria-label="locked">🔒</span>' : ''}`;
+  const price = HAT_PRICES[chosenHat - FREE_HATS];
+  $('unlockBtn').hidden = !locked;
+  if (locked) {
+    const short = price - profile.crowns;
+    $('unlockBtn').disabled = short > 0;
+    $('unlockBtn').textContent = short > 0 ? `Unlock for 👑 ${price} (${short} more to go)` : `Unlock for 👑 ${price}`;
+  }
   preview.set(chosenColor, chosenHat);
 }
+
+function showProfile(p) {
+  profile = { crowns: p.crowns ?? 0, owned: p.owned ?? [] };
+  $('crowns').querySelector('b').textContent = profile.crowns;
+  $('myRank').innerHTML = p.rated ? `${tierBadge(p.r)} #${p.pos}` : '';
+  refreshLook();
+}
+
+async function loadProfile() {
+  try {
+    const res = await fetch('/api/me', { method: 'POST', body: JSON.stringify({ k: playerKey() }) });
+    showProfile(await res.json());
+  } catch {
+    // the menu still works with the free hats
+  }
+}
+
+$('unlockBtn').addEventListener('click', async () => {
+  try {
+    const res = await fetch('/api/buy', { method: 'POST', body: JSON.stringify({ k: playerKey(), hat: chosenHat }) });
+    const body = await res.json();
+    if (!res.ok) {
+      setStatus(body.error === 'no profile' ? 'Finish a match first to start earning crowns.' : `Couldn't unlock it: ${body.error}.`);
+      return;
+    }
+    showProfile(body);
+    sfx.crown();
+  } catch {
+    setStatus('Could not reach the server, try again.');
+  }
+});
 
 const colorsEl = $('colors');
 PALETTE.forEach((c, i) => {
@@ -821,7 +869,7 @@ async function loadRanks() {
       fetch('/api/leaderboard').then((res) => res.json()),
       fetch('/api/me', { method: 'POST', body: JSON.stringify({ k: playerKey() }) }).then((res) => res.json()),
     ]);
-    $('myRank').innerHTML = me.rated ? `${tierBadge(me.r)} #${me.pos}` : '';
+    showProfile(me);
     $('rankList').innerHTML = top.top.length
       ? top.top.map((p, i) => `<li><span class="pos">${i + 1}</span><span class="nm">${esc(p.n)}</span>${tierBadge(p.r)}<span class="rt">${p.r}</span></li>`).join('')
       : '<li class="empty">No rated matches yet. Play one!</li>';
@@ -841,7 +889,7 @@ $('ranksClose').addEventListener('click', () => showRanks(false));
 addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !$('ranks').hidden) showRanks(false);
 });
-if (!ROOM) loadRanks();
+loadProfile();
 
 function backToMenu(reason) {
   joined = false;
@@ -880,6 +928,11 @@ $('joinForm').addEventListener('submit', (e) => {
     localStorage.setItem('bb.color', String(chosenColor));
     localStorage.setItem('bb.hat', String(chosenHat));
   } catch { /* storage blocked, not important */ }
+  // a hat you're only trying on isn't worn into the game
+  if (!owns(chosenHat)) {
+    chosenHat = 0;
+    refreshLook();
+  }
   wantJoin = { t: 'join', n: name, c: chosenColor, h: chosenHat, k: playerKey() };
   send(wantJoin);
   $('name').blur();

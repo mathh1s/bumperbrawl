@@ -47,9 +47,8 @@ func NewLobby(cfg Config, store *Store) *Lobby {
 
 func (l *Lobby) start(code string) *room {
 	g := NewGame(code, l.cfg)
-	if code == "" {
-		g.store = l.store
-	}
+	// every room knows profiles for crowns and hats; only the public room is rated
+	g.store = l.store
 	r := &room{game: g, stop: make(chan struct{})}
 	go r.game.run(r.stop)
 	return r

@@ -1,7 +1,11 @@
 import * as THREE from 'three';
 
 export const PALETTE = ['#ff6b6b', '#ffa94d', '#ffd43b', '#69db7c', '#38d9a9', '#4dabf7', '#9775fa', '#f783ac'];
-export const HATS = ['Sprout', 'Party hat', 'Viking', 'Propeller', 'Top hat', 'Cowboy', 'Beanie', 'Flower', 'Chef'];
+// the first nine are free; the rest are unlocked with crowns (prices in server/shop.go)
+export const HATS = ['Sprout', 'Party hat', 'Viking', 'Propeller', 'Top hat', 'Cowboy', 'Beanie', 'Flower', 'Chef',
+  'Wizard', 'Pirate', 'Headphones', 'Halo', 'Antlers', 'Traffic cone', 'Bunny ears', 'Rubber duck'];
+export const FREE_HATS = 9;
+export const HAT_PRICES = [60, 80, 100, 120, 150, 180, 220, 300];
 
 const BODY = new THREE.SphereGeometry(0.8, 28, 20);
 const EYE = new THREE.SphereGeometry(0.2, 16, 12);
@@ -139,6 +143,107 @@ function hatBuilder(ramp) {
       for (const [x, z] of [[0.15, 0.1], [-0.15, 0.1], [0, -0.15], [0, 0.05]]) {
         g.add(mesh(new THREE.SphereGeometry(0.24, 12, 10), white, x, 0.4, z));
       }
+      return g;
+    },
+    // ---- unlockable ----
+    () => {
+      const g = new THREE.Group();
+      const purple = toon('#7048e8');
+      g.add(mesh(new THREE.CylinderGeometry(0.58, 0.58, 0.05, 24), purple, 0, 0.02, 0));
+      const cone = mesh(new THREE.ConeGeometry(0.34, 0.95, 18), purple, 0, 0.5, 0);
+      cone.rotation.z = -0.18;
+      g.add(cone);
+      const star = toon('#ffd43b');
+      for (const [x, y, z] of [[0.1, 0.35, 0.28], [-0.12, 0.6, 0.2], [0.05, 0.8, 0.12]]) {
+        g.add(mesh(new THREE.OctahedronGeometry(0.06, 0), star, x, y, z));
+      }
+      return g;
+    },
+    () => {
+      const g = new THREE.Group();
+      const black = toon('#3b2f52');
+      const gold = toon('#e0a83a');
+      // a tricorn: a triangular brim turned up at the edges, with gold trim and a skull badge
+      const brim = mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.1, 3), black, 0, 0.12, 0);
+      brim.rotation.y = Math.PI / 2;
+      g.add(brim);
+      const trim = mesh(new THREE.TorusGeometry(0.42, 0.04, 6, 3).rotateX(Math.PI / 2), gold, 0, 0.18, 0);
+      trim.rotation.y = Math.PI / 2;
+      g.add(trim);
+      const top = dome(0.44, black);
+      top.position.y = 0.1;
+      top.scale.y = 1.05;
+      g.add(top);
+      const skull = mesh(new THREE.SphereGeometry(0.11, 10, 8), toon('#ffffff'), 0, 0.33, 0.4);
+      skull.scale.z = 0.35;
+      g.add(skull);
+      return g;
+    },
+    () => {
+      const g = new THREE.Group();
+      const band = mesh(new THREE.TorusGeometry(0.5, 0.05, 8, 24, Math.PI), toon('#495057'), 0, -0.1, 0);
+      g.add(band);
+      for (const s of [-1, 1]) {
+        const cup = mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.14, 16).rotateZ(Math.PI / 2), toon('#ff6b6b'), s * 0.52, -0.2, 0);
+        g.add(cup);
+      }
+      return g;
+    },
+    () => {
+      const g = new THREE.Group();
+      const halo = mesh(new THREE.TorusGeometry(0.32, 0.055, 8, 28).rotateX(Math.PI / 2),
+        new THREE.MeshToonMaterial({ color: '#ffe066', gradientMap: ramp, emissive: '#806000' }), 0, 0.42, 0);
+      g.add(halo);
+      g.userData.bob = halo;
+      return g;
+    },
+    () => {
+      const g = new THREE.Group();
+      const horn = toon('#a0703c');
+      for (const s of [-1, 1]) {
+        const stem = mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.45, 6), horn, s * 0.25, 0.2, 0);
+        stem.rotation.z = -s * 0.4;
+        g.add(stem);
+        for (const k of [0.2, 0.32]) {
+          const tine = mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.2, 6), horn, s * (0.25 + k * 0.45), k + 0.05, 0.03);
+          tine.rotation.z = s * 0.6;
+          g.add(tine);
+        }
+      }
+      return g;
+    },
+    () => {
+      const g = new THREE.Group();
+      const orange = toon('#ff8c1a');
+      g.add(mesh(new THREE.BoxGeometry(0.62, 0.06, 0.62), orange, 0, 0.03, 0));
+      g.add(mesh(new THREE.ConeGeometry(0.26, 0.75, 16), orange, 0, 0.42, 0));
+      g.add(mesh(new THREE.CylinderGeometry(0.17, 0.2, 0.1, 16), toon('#ffffff'), 0, 0.42, 0));
+      return g;
+    },
+    () => {
+      const g = new THREE.Group();
+      const fur = toon('#ffffff');
+      const pink = toon('#ffb3c6');
+      for (const s of [-1, 1]) {
+        const ear = mesh(new THREE.SphereGeometry(0.12, 10, 8), fur, s * 0.17, 0.38, 0);
+        ear.scale.set(0.8, 3, 0.5);
+        ear.rotation.z = -s * 0.2;
+        const inner = mesh(new THREE.SphereGeometry(0.07, 8, 6), pink, s * 0.17, 0.38, 0.04);
+        inner.scale.set(0.8, 3.2, 0.4);
+        inner.rotation.z = -s * 0.2;
+        g.add(ear, inner);
+      }
+      return g;
+    },
+    () => {
+      const g = new THREE.Group();
+      const yellow = toon('#ffd43b');
+      const body = mesh(new THREE.SphereGeometry(0.22, 14, 10), yellow, 0, 0.17, -0.03);
+      body.scale.set(1, 0.8, 1.25);
+      const head = mesh(new THREE.SphereGeometry(0.14, 12, 10), yellow, 0, 0.38, 0.13);
+      const beak = mesh(new THREE.ConeGeometry(0.06, 0.14, 8).rotateX(Math.PI / 2), toon('#ff922b'), 0, 0.36, 0.3);
+      g.add(body, head, beak);
+      for (const s of [-1, 1]) g.add(mesh(new THREE.SphereGeometry(0.025, 6, 4), INK, s * 0.06, 0.42, 0.25));
       return g;
     },
   ];
@@ -380,6 +485,7 @@ export class Blob {
     }
 
     if (this.hat.userData.spinner) this.hat.userData.spinner.rotation.y += dt * (8 + this.speed * 3);
+    if (this.hat.userData.bob) this.hat.userData.bob.position.y = 0.42 + Math.sin(t * 3 + this.seed) * 0.04;
     if (this.crown?.visible) {
       // the crown floats above the hat in group space so it stays level while the body wobbles
       this.crown.position.y = 2.05 + this.pivot.position.y - 0.72 + Math.sin(t * 3) * 0.06;
