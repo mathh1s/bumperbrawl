@@ -128,3 +128,41 @@ func TestPublicRoomHasNoLobby(t *testing.T) {
 		t.Fatal("the public room plays continuously and has no host")
 	}
 }
+
+func TestHostCanKick(t *testing.T) {
+	g, cs := privateGame(t, 3)
+	target := cs[2].player.ID
+	g.handle(cs[1], inMsg{T: "kick", I: target})
+	if cs[2].player == nil {
+		t.Fatal("only the host may kick")
+	}
+	g.handle(cs[0], inMsg{T: "kick", I: cs[0].player.ID})
+	if cs[0].player == nil {
+		t.Fatal("the host can't kick themselves")
+	}
+	g.handle(cs[0], inMsg{T: "kick", I: target})
+	if cs[2].player != nil || g.players[target] != nil {
+		t.Fatal("kicked player should be back to watching")
+	}
+	g.handle(cs[2], inMsg{T: "join", N: "again"})
+	if cs[2].player == nil {
+		t.Fatal("a kicked player can join again from the menu")
+	}
+}
+
+func TestRoomInfo(t *testing.T) {
+	l := newTestLobby()
+	c := &Client{send: make(chan []byte, 64)}
+	g, _ := l.join("INFOX", c)
+	g.handle(c, inMsg{T: "join", N: "Mia"})
+	info, ok := l.info("INFOX")
+	if !ok || len(info.Players) != 1 || info.Players[0] != "Mia" || info.Playing {
+		t.Fatalf("unexpected room info %+v %v", info, ok)
+	}
+	if _, ok := l.info("NOPEX"); ok {
+		t.Fatal("unknown codes are not rooms")
+	}
+	if _, ok := l.info(""); ok {
+		t.Fatal("the public room is not looked up by code")
+	}
+}

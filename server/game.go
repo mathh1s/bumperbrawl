@@ -672,6 +672,7 @@ type inMsg struct {
 	Z float64 `json:"z"`
 	S int64   `json:"s"`
 	V bool    `json:"v"`
+	I int     `json:"i"`
 
 	Set *RoomSettings `json:"set"`
 }
@@ -707,7 +708,7 @@ func (g *Game) handle(c *Client, m inMsg) {
 		}))
 		g.broadcast(g.rosterMsg())
 		g.roomChanged()
-	case "ready", "settings", "start":
+	case "ready", "settings", "start", "kick":
 		if c.player != nil {
 			g.handleRoom(c.player, m)
 		}

@@ -156,9 +156,26 @@ h1 {
 }
 .ghost:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
 .ghost.small { width: auto; padding: 3px 12px; font-size: 14px; }
-#roomInfo { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 15px; }
-#roomInfo b { letter-spacing: 0.12em; color: var(--accent); }
-#roomInfo a { color: var(--ink); opacity: 0.6; font-size: 13px; }
+#roomInfo { margin: 0 0 10px; }
+.roomHead { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 17px; font-weight: 600; }
+.roomHead b { letter-spacing: 0.14em; color: var(--accent); font-size: 22px; }
+.who { margin: 8px 0 0; font-size: 13px; opacity: 0.75; min-height: 1.2em; }
+.who b { font-weight: 600; }
+.divider { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; font-size: 12px; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.06em; }
+.divider::before, .divider::after { content: ""; flex: 1; border-top: 2px dashed rgba(45, 36, 64, 0.35); }
+.codeRow { display: flex; gap: 8px; margin-top: 8px; }
+#codeInput {
+  flex: 1; min-width: 0;
+  font: 600 17px var(--font); color: var(--ink);
+  text-align: center; text-transform: uppercase; letter-spacing: 0.14em;
+  padding: 6px 10px;
+  border: 3px solid var(--ink); border-radius: 14px;
+  background: #fff; outline: none;
+}
+#codeInput::placeholder { text-transform: none; letter-spacing: normal; opacity: 0.5; }
+#codeInput:focus { box-shadow: 0 0 0 4px var(--gold); }
+.codeRow .ghost { width: auto; }
+.leave { display: block; margin-top: 10px; color: var(--ink); opacity: 0.6; font-size: 13px; }
 #board .room {
   pointer-events: auto;
   cursor: pointer;
@@ -271,6 +288,13 @@ kbd {
 #lobby .tag.ok { background: #69db7c; border: 2px solid var(--ink); }
 #lobby .tag.wait { opacity: 0.55; }
 #lobby .tag.bot { opacity: 0.45; }
+#lobby .kick {
+  width: 20px; height: 20px; padding: 0; flex: none;
+  font: 700 11px/1 var(--font); color: var(--ink);
+  background: #fff; border: 2px solid var(--ink); border-radius: 6px; cursor: pointer; opacity: 0.6;
+}
+#lobby .kick:hover { opacity: 1; background: #ffe3e3; }
+#lobby .leave { margin-top: 8px; text-align: center; font-size: 12px; }
 #lobby .settings { padding-top: 8px; }
 #lobby .row { display: flex; align-items: center; justify-content: space-between; padding: 2px 0; }
 #lobby .ctl { display: flex; align-items: center; gap: 6px; }

@@ -36,6 +36,10 @@ export class LobbyPanel {
       btn.blur();
       const { act, key, dir, mode } = btn.dataset;
       if (act === 'invite') onInvite();
+      if (act === 'kick') {
+        const who = btn.dataset.name;
+        if (confirm(`Remove ${who} from the room?`)) this.send({ t: 'kick', i: Number(btn.dataset.id) });
+      }
       if (act === 'collapse') this.toggle();
       if (act === 'ready') this.send({ t: 'ready', v: !this.meReady });
       if (act === 'start') this.send({ t: 'start' });
@@ -75,8 +79,10 @@ export class LobbyPanel {
       .map((p) => {
         const tag = p.b ? '<span class="tag bot">bot</span>'
           : ready.has(p.i) ? '<span class="tag ok">ready</span>' : '<span class="tag wait">not ready</span>';
+        const kick = isHost && !p.b && p.i !== myId
+          ? `<button class="kick" data-act="kick" data-id="${p.i}" data-name="${esc(p.n)}" aria-label="Remove ${esc(p.n)}">✕</button>` : '';
         return `<li class="${p.i === myId ? 'me' : ''}"><span class="dot" style="background:${PALETTE[p.c]}"></span>`
-          + `<span class="nm">${esc(p.n)}</span>${p.i === room.host ? CROWN : ''}${tag}</li>`;
+          + `<span class="nm">${esc(p.n)}</span>${p.i === room.host ? CROWN : ''}${tag}${kick}</li>`;
       }).join('');
 
     const steppers = STEPPERS.filter((s) => !s.hide?.(room.set)).map((s) => {
@@ -117,7 +123,8 @@ export class LobbyPanel {
       <div class="actions">
         <button class="readyBtn ${this.meReady ? 'on' : ''}" data-act="ready">${this.meReady ? 'Ready!' : 'Ready up'}</button>
         ${start}
-      </div>`;
+      </div>
+      <a class="leave" href="/">Leave room</a>`;
     // rebuilding on every HUD tick would swallow clicks that land between mousedown and mouseup
     if (html !== this.html) {
       this.html = html;

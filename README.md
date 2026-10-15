@@ -16,7 +16,7 @@ A small online 3D party brawler. Everyone is a squishy blob on a floating hex is
 - Power-up crates: heavy, bouncy and ground pound
 - In the last 30 seconds a giant log sweeps the island; jump it or get swept away
 - The leader wears a crown worth 2 points to whoever knocks them off; rounds end on a podium
-- Private rooms: "Play with friends" creates a room at `/?room=CODE` to share. It opens in a lobby that lists who joined and who is ready; the host (first one in) picks rounds, round length, bots and modes, and the match starts when everyone is ready or the host starts it. Private rooms can also play a Knockout match: after each round only the best 60% go through, the eliminated watch, and the last three or fewer play a Last Blob Standing final. After the match the room goes back to the lobby. Empty rooms close after a minute
+- Private rooms: "Create a room" makes a room at `/?room=CODE` to share, and friends can type the code (or paste the link) into the menu to join. The menu shows who is already in a room before you join. It opens in a lobby that lists who joined and who is ready; the host (first one in) picks rounds, round length, bots and modes, and the match starts when everyone is ready or the host starts it. Private rooms can also play a Knockout match: after each round only the best 60% go through, the eliminated watch, and the last three or fewer play a Last Blob Standing final. After the match the room goes back to the lobby. The host can remove players. Empty rooms close after a minute
 
 ## Run with Docker
 

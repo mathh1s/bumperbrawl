@@ -119,8 +119,12 @@ function onMessage(m) {
         if (!roster.has(id)) { b.dispose(); blobs.delete(id); }
       }
       renderLobby();
+      renderWho();
       break;
     }
+    case 'kicked':
+      backToMenu('The host removed you from the room.');
+      break;
     case 'room':
       roomState = m;
       renderLobby();
@@ -164,7 +168,9 @@ function onSnapshot(m) {
   const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, fm: m.fm ?? 0, kq: m.kq ?? 0, fin: !!m.fin, hl: m.hl, co: m.co, bl: m.bl };
   snaps.push(snap);
   if (snaps.length > 60) snaps.shift();
+  const phaseChanged = latest?.ph !== snap.ph;
   latest = snap;
+  if (phaseChanged) renderWho();
   for (const e of m.e ?? []) pending.push({ t, e });
 }
 
@@ -659,11 +665,81 @@ function flashInvite(text) {
 }
 
 if (ROOM) {
-  $('friendsBtn').hidden = true;
+  $('publicRooms').hidden = true;
   $('roomInfo').hidden = false;
+  $('leaveRoom').hidden = false;
   $('roomCode').textContent = ROOM;
+  $('play').textContent = 'Join room';
 }
+// desktop browsers without a share sheet just copy the link
+if (!navigator.share) $('inviteBtn').textContent = 'Copy link';
 $('inviteBtn').addEventListener('click', invite);
+
+// who is around, shown under the play button while you're still in the menu
+function renderWho() {
+  if (joined) return;
+  const names = [...roster.values()].filter((p) => !p.b).map((p) => `<b>${esc(p.n)}</b>`);
+  if (!ROOM) {
+    const n = names.length;
+    $('who').innerHTML = n ? `${n} blob${n === 1 ? '' : 's'} playing right now` : 'Nobody here yet, bots will keep you company';
+    return;
+  }
+  if (!names.length) {
+    $('who').textContent = 'Nobody here yet. Share the code with your friends!';
+    return;
+  }
+  const busy = latest && latest.ph !== 2 ? '<br>A match is running, you can jump right in' : '';
+  $('who').innerHTML = `In this room: ${names.join(', ')}${busy}`;
+}
+
+// accepts a bare code or a whole invite link
+function codeFrom(text) {
+  const t = text.trim();
+  const fromLink = t.match(/[?&]room=([A-Za-z]+)/);
+  return (fromLink ? fromLink[1] : t).toUpperCase().replace(/[^A-Z]/g, '');
+}
+
+async function joinByCode() {
+  const code = codeFrom($('codeInput').value);
+  if (!/^[A-Z]{4,6}$/.test(code)) {
+    setStatus('Room codes are 4 to 6 letters.');
+    return;
+  }
+  try {
+    const res = await fetch(`/api/rooms/${code}`);
+    if (res.status === 404) {
+      setStatus(`There is no room ${code}. Check the code or create a room.`);
+      return;
+    }
+    if (!res.ok) throw new Error(res.statusText);
+    location.href = `/?room=${code}`;
+  } catch {
+    setStatus('Could not reach the server, try again.');
+  }
+}
+$('codeBtn').addEventListener('click', joinByCode);
+$('codeInput').addEventListener('keydown', (e) => {
+  // Enter here means join this room, not submit the play form
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    joinByCode();
+  }
+});
+
+function backToMenu(reason) {
+  joined = false;
+  myId = null;
+  predictor = null;
+  wantJoin = null;
+  podium.hide();
+  $('menu').hidden = false;
+  $('hud').hidden = true;
+  $('touch').hidden = true;
+  $('lobby').hidden = true;
+  document.body.classList.remove('lobby', 'standings');
+  setStatus(reason);
+  renderWho();
+}
 $('board').addEventListener('click', (e) => {
   if (e.target.closest('[data-invite]')) invite();
 });

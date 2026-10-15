@@ -113,3 +113,20 @@ func (l *Lobby) reapOnce(elapsed time.Duration) {
 		}
 	}
 }
+
+// RoomInfo is what the menu shows about a room before joining it
+type RoomInfo struct {
+	Code    string   `json:"code"`
+	Players []string `json:"players"`
+	Playing bool     `json:"playing"` // a match is running rather than the lobby
+}
+
+func (l *Lobby) info(code string) (RoomInfo, bool) {
+	l.mu.Lock()
+	r, ok := l.rooms[code]
+	l.mu.Unlock()
+	if !ok || code == "" {
+		return RoomInfo{}, false
+	}
+	return r.game.info(), true
+}

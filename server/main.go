@@ -45,6 +45,15 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"code": lobby.newCode()})
 	})
+	mux.HandleFunc("GET /api/rooms/{code}", func(w http.ResponseWriter, r *http.Request) {
+		info, ok := lobby.info(normalizeCode(r.PathValue("code")))
+		if !ok {
+			http.Error(w, "no such room", http.StatusNotFound)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(info)
+	})
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) { lobby.serveWS(w, r, origins) })
 
 	log.Printf("bumper brawl listening on %s (web: %s)", addr, webDir)

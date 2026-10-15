@@ -52,15 +52,23 @@
       </div>
       <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false">
       <div id="colors"></div>
-      <button id="play" type="submit">Play</button>
-      <div class="rooms">
-        <button type="button" id="friendsBtn" class="ghost">Play with friends</button>
-        <div id="roomInfo" hidden>
+      <div id="roomInfo" hidden>
+        <div class="roomHead">
           <span>Room <b id="roomCode"></b></span>
           <button type="button" id="inviteBtn" class="ghost small">Invite</button>
-          <a href="/">Leave</a>
         </div>
       </div>
+      <button id="play" type="submit">Play</button>
+      <p class="who" id="who"></p>
+      <div class="rooms" id="publicRooms">
+        <div class="divider"><span>or play with friends</span></div>
+        <button type="button" id="friendsBtn" class="ghost">Create a room</button>
+        <div class="codeRow">
+          <input id="codeInput" maxlength="40" placeholder="Room code" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
+          <button type="button" id="codeBtn" class="ghost">Join</button>
+        </div>
+      </div>
+      <a class="leave" id="leaveRoom" href="/" hidden>Leave room</a>
       <p class="keys"><kbd>WASD</kbd> move &nbsp;·&nbsp; <kbd>Shift</kbd> dash, hold to charge &nbsp;·&nbsp; <kbd>Space</kbd> jump</p>
       <p id="status">Connecting…</p>
     </form>

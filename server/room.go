@@ -144,6 +144,12 @@ func (g *Game) roomMsg() []byte {
 }
 
 func (g *Game) handleRoom(p *Player, m inMsg) {
+	// kicking works mid-match too, so a host can deal with a troll without waiting
+	if m.T == "kick" && g.private {
+		g.kick(p, m.I)
+		g.roomChanged()
+		return
+	}
 	if !g.private || g.phase != phaseLobby {
 		return
 	}
@@ -164,4 +170,35 @@ func (g *Game) handleRoom(p *Player, m inMsg) {
 		g.forced = !(g.forced && g.counting)
 	}
 	g.roomChanged()
+}
+
+func (g *Game) info() RoomInfo {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	names := []string{}
+	for _, p := range g.players {
+		if !p.Bot {
+			names = append(names, p.Name)
+		}
+	}
+	slices.Sort(names)
+	return RoomInfo{Code: g.code, Players: names, Playing: g.phase != phaseLobby}
+}
+
+// kick sends a player back to the menu; the host can use it on anyone but themselves
+func (g *Game) kick(host *Player, id int) {
+	if host.ID != g.hostID || id == host.ID {
+		return
+	}
+	for c := range g.clients {
+		if c.player == nil || c.player.ID != id {
+			continue
+		}
+		g.queue(c, mustJSON(map[string]any{"t": "kicked"}))
+		delete(g.players, id)
+		c.player = nil
+		g.syncBots()
+		g.broadcast(g.rosterMsg())
+		return
+	}
 }
