@@ -22,8 +22,8 @@ const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 600);
 camera.position.set(0, 30, 30);
 
 const ramp = makeRamp();
-const world = new World(scene, ramp, ARENA_MAX);
 const fx = new FX(scene);
+const world = new World(scene, ramp, ARENA_MAX, fx);
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -169,8 +169,7 @@ function fireEvents(rt, view) {
     const me = myId !== null ? playerPos(myId, view) : null;
     switch (e.k) {
       case 'b': {
-        fx.burst(e.x, 0.9, e.z, { colors: ['#ffd43b', '#ffffff', '#ff922b'], n: Math.min(16, 4 + e.p), speed: 4 + e.p * 0.2, up: 3, size: 0.13 });
-        fx.ring(e.x, e.z, '#ffffff', 1.5 + e.p * 0.08);
+        fx.bump(e.x, e.z, e.p);
         for (const [id, b] of blobs) {
           const p = playerPos(id, view);
           if (p && Math.hypot(p.x - e.x, p.z - e.z) < 1.4) b.bump(e.p);
@@ -278,7 +277,7 @@ const input = new Input(() => {
   if (me && me.cd === 0 && !(me.flags & 4)) {
     sfx.dash();
     const b = blobs.get(myId);
-    if (b) fx.burst(b.group.position.x, 0.3, b.group.position.z, { colors: ['#f1e3c8', '#ffffff'], n: 8, speed: 2.5, up: 2, size: 0.18, gravity: 4 });
+    if (b) fx.puff(b.group.position.x, b.group.position.z);
   }
   send({ t: 'dash' });
 });
@@ -345,19 +344,20 @@ const camTarget = new THREE.Vector3();
 const lookAt = new THREE.Vector3();
 let menuAngle = 0;
 
+// Low three-quarter view so the horizon stays on screen; portrait screens pull back to keep the island in frame
 function updateCamera(dt, view) {
   const portrait = camera.aspect < 1;
-  const dist = portrait ? 1.55 : 1;
+  const dist = portrait ? 1.6 : 1;
   const me = joined && view ? view.players.get(myId) : null;
   if (me) {
-    if (!(me.flags & 4)) camTarget.set(me.x * 0.75, 0, me.z * 0.75);
+    if (!(me.flags & 4)) camTarget.set(me.x * 0.6, 0, me.z * 0.6);
     const k = 1 - Math.exp(-dt * 4);
-    camera.position.lerp(new THREE.Vector3(camTarget.x, 19 * dist, camTarget.z + 14 * dist), k);
-    lookAt.lerp(camTarget, k);
+    camera.position.lerp(new THREE.Vector3(camTarget.x, 12 * dist, camTarget.z + 17 * dist), k);
+    lookAt.lerp(new THREE.Vector3(camTarget.x, 0, camTarget.z - 2), k);
   } else {
-    menuAngle += dt * 0.08;
-    camera.position.set(Math.sin(menuAngle) * 30 * dist, 20 * dist, Math.cos(menuAngle) * 30 * dist);
-    lookAt.set(0, -1, 0);
+    menuAngle += dt * 0.06;
+    camera.position.set(Math.sin(menuAngle) * 36 * dist, 13 * dist, Math.cos(menuAngle) * 36 * dist);
+    lookAt.set(0, 1, 0);
   }
   camera.lookAt(lookAt);
 }
@@ -388,8 +388,7 @@ function frame(now) {
         scene.add(b.group);
       }
       if (b.update(s, dt, t) === 'splash') {
-        fx.burst(s.x, -0.6, s.z, { colors: ['#ffffff', '#bdeefa', '#4cc2d9'], n: 22, speed: 4, up: 9, life: 0.9, size: 0.2, gravity: 20 });
-        fx.ring(s.x, s.z, '#ffffff', 3);
+        fx.splash(s.x, s.z, 1.2);
         if (joined) {
           const me = view.players.get(myId);
           sfx.splash(id === myId || (me && Math.hypot(me.x - s.x, me.z - s.z) < 8));

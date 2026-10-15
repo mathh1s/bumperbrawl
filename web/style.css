@@ -24,6 +24,12 @@ html, body {
 
 #game { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
 
+#vignette {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 55%, transparent 55%, rgba(40, 24, 70, 0.28) 100%);
+}
+
 [hidden] { display: none !important; }
 
 /* ==== menu ==== */
