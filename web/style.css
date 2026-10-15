@@ -309,7 +309,10 @@ body.touch #power { bottom: 84px; }
 #musicBtn .slash { display: none; stroke: var(--accent); stroke-width: 3; }
 #musicBtn.off .slash { display: block; }
 #musicBtn:active { transform: translateY(3px); box-shadow: 0 1px 0 var(--ink); }
-body.touch #musicBtn { right: auto; left: 50%; margin-left: -22px; bottom: 28px; }
+body.touch #musicBtn { right: auto; bottom: auto; top: 14px; left: calc(50% + 74px); width: 40px; height: 40px; }
+@media (max-width: 640px) {
+  body.touch #musicBtn { left: 132px; }
+}
 
 /* ==== touch ==== */
 
@@ -344,6 +347,19 @@ body.touch #musicBtn { right: auto; left: 50%; margin-left: -22px; bottom: 28px;
 #dashBtn:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); }
 #dashBtn { background: conic-gradient(var(--gold) calc(var(--fill, 0) * 1turn), var(--accent) 0); }
 #dashBtn.cool { filter: saturate(0.3) brightness(0.9); }
+#jumpBtn {
+  position: absolute; right: 132px; bottom: 22px;
+  width: 72px; height: 72px;
+  border-radius: 50%;
+  pointer-events: auto;
+  font: 700 16px var(--font);
+  color: #fff;
+  background: #4dabf7;
+  border: 4px solid var(--ink);
+  box-shadow: 0 5px 0 var(--ink);
+  -webkit-text-stroke: 1px var(--ink);
+}
+#jumpBtn:active { transform: translateY(4px); box-shadow: 0 1px 0 var(--ink); }
 body.touch #dash { display: none; }
 
 @media (max-width: 640px) {

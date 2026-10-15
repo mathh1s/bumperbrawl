@@ -5,9 +5,10 @@ A small online 3D party brawler. Everyone is a squishy blob on a floating hex is
 - Server: Go, authoritative physics at 60 Hz, state broadcast at 20 Hz over WebSockets
 - Client: Three.js (vendored, no CDN), toon-shaded low-poly look, snapshot interpolation
 - Bots top the lobby up to `MIN_PLAYERS` whenever at least one human is playing
-- Works on desktop (WASD / arrows + Space or Shift to dash) and touch (virtual stick + dash button)
+- Works on desktop (WASD / arrows, Shift dash, Space jump) and touch (virtual stick, dash and jump buttons)
 - Hold dash to charge a stronger launch; tap for a quick one
 - Power-up crates: heavy, bouncy and ground pound
+- In the last 30 seconds a giant log sweeps the island; jump it or get swept away
 - The leader wears a crown worth 2 points to whoever knocks them off; rounds end on a podium
 - Private rooms: "Play with friends" creates a room at `/?room=CODE` to share; empty rooms close after a minute
 

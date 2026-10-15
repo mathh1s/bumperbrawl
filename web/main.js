@@ -3,6 +3,7 @@ import { World, makeRamp } from './world.js';
 import { Blob, PALETTE, HATS } from './blobs.js';
 import { Preview } from './preview.js';
 import { Podium } from './podium.js';
+import { Sweeper } from './sweeper.js';
 import { FX } from './fx.js';
 import { Crates, POWERS } from './crates.js';
 import { Input } from './input.js';
@@ -33,6 +34,11 @@ const fx = new FX(scene);
 const world = new World(scene, ramp, ARENA_MAX, fx);
 const crates = new Crates(scene, ramp);
 const podium = new Podium(ramp);
+const sweeper = new Sweeper(scene, ramp, fx);
+sweeper.onLand = () => {
+  shake = 0.5;
+  if (joined) sfx.pound(true);
+};
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -119,7 +125,7 @@ function onSnapshot(m) {
     players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0 });
   }
   const t = m.now * 1000 + clockOffset;
-  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0 };
+  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw };
   snaps.push(snap);
   if (snaps.length > 60) snaps.shift();
   latest = snap;
@@ -161,7 +167,8 @@ function sample(rt) {
       pw: pb.pw,
     });
   }
-  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw };
+  const sw = a.sw && b.sw ? [lerpAngle(a.sw[0], b.sw[0], k), a.sw[1] + (b.sw[1] - a.sw[1]) * k] : b.sw;
+  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw, sw };
 }
 
 // ==== events ====
@@ -226,6 +233,18 @@ function fireEvents(rt, view) {
         const near = me ? Math.hypot(me.x - e.x, me.z - e.z) < 7 : false;
         if (joined) sfx.pound(near);
         if (near) shake = 0.7;
+        break;
+      }
+      case 'sws':
+        if (joined) banner(`Log incoming!<small>${isTouch ? 'tap Jump' : 'press Space'} to hop over it</small>`, 2200);
+        break;
+      case 'swh': {
+        fx.bump(e.x, e.z, 10);
+        for (const [id, b] of blobs) {
+          const p = playerPos(id, view);
+          if (p && Math.hypot(p.x - e.x, p.z - e.z) < 1.2) b.bump(16);
+        }
+        if (joined) sfx.bump(16, me ? Math.hypot(me.x - e.x, me.z - e.z) < 2 : false);
         break;
       }
       case 'cg':
@@ -344,6 +363,12 @@ const input = new Input({
     if (dashReady()) sfx.chargeStart();
     send({ t: 'charge' });
   },
+  onJump() {
+    if (!joined) return;
+    const me = latest?.players.get(myId);
+    if (me && me.y <= 0.01 && !(me.flags & 4)) sfx.jump();
+    send({ t: 'jump' });
+  },
   onDashUp() {
     if (!joined) return;
     sfx.chargeStop();
@@ -356,7 +381,7 @@ const input = new Input({
     send({ t: 'dash' });
   },
 });
-if (isTouch) input.bindTouch({ pad: $('pad'), stick: $('stick'), knob: $('knob'), dashBtn: $('dashBtn'), canvas });
+if (isTouch) input.bindTouch({ pad: $('pad'), stick: $('stick'), knob: $('knob'), dashBtn: $('dashBtn'), jumpBtn: $('jumpBtn'), canvas });
 
 let lastSent = { x: 0, z: 0 };
 let sendClock = 0;
@@ -549,7 +574,9 @@ function frame(now) {
         const a = Math.random() * Math.PI * 2;
         fx.burst(s.x + Math.sin(a) * 0.9, 0.4 + Math.random(), s.z + Math.cos(a) * 0.9, { colors: ['#ffd43b', '#fff6c4'], n: 2, speed: 0.6, up: 2, size: 0.09, life: 0.4, gravity: 2 });
       }
-      if (b.update(s, dt, t) === 'splash') {
+      const happened = b.update(s, dt, t);
+      if (happened === 'land') fx.puff(s.x, s.z);
+      if (happened === 'splash') {
         fx.splash(s.x, s.z, 1.2);
         if (joined) {
           const me = view.players.get(myId);
@@ -566,6 +593,7 @@ function frame(now) {
 
   world.update(dt, view?.r ?? null, camera);
   crates.sync(view?.crates ?? [], dt, t);
+  sweeper.update(view?.sw, dt);
   fx.update(dt);
   pumpInput(dt);
   updateCamera(dt, view);

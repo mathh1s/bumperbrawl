@@ -1,12 +1,14 @@
-const DASH_KEYS = new Set(['Space', 'ShiftLeft', 'ShiftRight', 'KeyJ']);
+const DASH_KEYS = new Set(['ShiftLeft', 'ShiftRight', 'KeyE', 'KeyJ']);
+const JUMP_KEYS = new Set(['Space', 'KeyK']);
 const STICK_RANGE = 55;
 
 export class Input {
-  constructor({ onDashDown, onDashUp }) {
+  constructor({ onDashDown, onDashUp, onJump }) {
     this.keys = new Set();
     this.touch = { x: 0, z: 0 };
     this.onDashDown = onDashDown;
     this.onDashUp = onDashUp;
+    this.onJump = onJump;
     this.dashHeld = false;
 
     addEventListener('keydown', (e) => {
@@ -14,6 +16,10 @@ export class Input {
       if (DASH_KEYS.has(e.code)) {
         e.preventDefault();
         if (!e.repeat) this.pressDash();
+      }
+      if (JUMP_KEYS.has(e.code)) {
+        e.preventDefault();
+        if (!e.repeat) this.onJump();
       }
       this.keys.add(e.code);
     });
@@ -53,10 +59,10 @@ export class Input {
     return { x, z };
   }
 
-  bindTouch({ pad, stick, knob, dashBtn, canvas }) {
+  bindTouch({ pad, stick, knob, dashBtn, jumpBtn, canvas }) {
     // iOS Safari ignores user-scalable=no, so pinch and double-tap zoom must be cancelled on the raw touch events
     const block = (e) => e.preventDefault();
-    for (const el of [pad, dashBtn, canvas]) {
+    for (const el of [pad, dashBtn, jumpBtn, canvas]) {
       for (const type of ['touchstart', 'touchmove', 'touchend']) el.addEventListener(type, block, { passive: false });
     }
     for (const type of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(type, block);
@@ -100,5 +106,10 @@ export class Input {
       this.pressDash();
     });
     for (const type of ['pointerup', 'pointercancel']) dashBtn.addEventListener(type, () => this.releaseDash());
+
+    jumpBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      this.onJump();
+    });
   }
 }

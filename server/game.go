@@ -64,6 +64,10 @@ type Player struct {
 
 	InX, InZ float64
 	WantDash bool
+	WantJump bool
+	Airborne bool
+	JumpCD   float64
+	SweepCD  float64
 
 	DashCD    float64
 	DashT     float64
@@ -111,6 +115,9 @@ type Game struct {
 	crownID    int
 	roundTime  float64
 	code       string
+	sweepA     float64
+	sweepDir   float64
+	sweepOn    bool
 }
 
 func NewGame(code string, minPlayers int, roundTime float64) *Game {
@@ -132,6 +139,7 @@ func (g *Game) startRound() {
 	g.phaseT = g.roundTime
 	g.radius = arenaMax
 	g.clearCrates()
+	g.resetSweeper()
 	for _, p := range g.players {
 		p.Score = 0
 		g.respawn(p)
@@ -198,6 +206,7 @@ func (g *Game) respawn(p *Player) {
 	p.DashCD, p.DashT = 0, 0
 	p.Charging, p.ChargeT = false, 0
 	p.Pow, p.PowT, p.PoundT = powNone, 0, 0
+	p.Airborne, p.JumpCD, p.SweepCD = false, 0, 0
 	p.LastHitBy = 0
 	p.Angle = math.Atan2(-p.X, -p.Z)
 }
@@ -237,6 +246,7 @@ func (g *Game) step(dt float64) {
 		p.DashCD = math.Max(0, p.DashCD-dt)
 		p.DashT = math.Max(0, p.DashT-dt)
 		g.updatePower(p, dt)
+		g.updateJump(p, dt)
 
 		inLen := math.Hypot(p.InX, p.InZ)
 		if inLen > 0.1 {
@@ -279,11 +289,12 @@ func (g *Game) step(dt float64) {
 	}
 
 	g.collide()
+	g.updateSweeper(dt)
 	g.updateCrates(dt)
 
 	for _, p := range g.players {
-		// a ground pound is airborne, so leaving the island only counts once it lands
-		if !p.Falling && p.PoundT == 0 && math.Hypot(p.X, p.Z) > g.radius {
+		// jumps and ground pounds are airborne, so leaving the island only counts once they land
+		if !p.Falling && p.PoundT == 0 && !p.Airborne && math.Hypot(p.X, p.Z) > g.radius {
 			g.knockOut(p)
 		}
 	}
@@ -311,6 +322,9 @@ func (g *Game) collide() {
 	for i := 0; i < len(list); i++ {
 		for j := i + 1; j < len(list); j++ {
 			a, b := list[i], list[j]
+			if math.Abs(a.Y-b.Y) > 1 {
+				continue
+			}
 			dx, dz := b.X-a.X, b.Z-a.Z
 			d := math.Hypot(dx, dz)
 			overlap := a.radius() + b.radius() - d
@@ -360,6 +374,7 @@ func (g *Game) collide() {
 func (g *Game) knockOut(p *Player) {
 	p.Falling = true
 	p.Charging = false
+	p.Airborne = false
 	p.Pow, p.PowT, p.PoundT = powNone, 0, 0
 	p.FallT = 0
 	p.VY = 3
@@ -425,6 +440,7 @@ func (g *Game) thinkBots(dt float64) {
 		if !b.Bot || b.Falling {
 			continue
 		}
+		g.botJump(b)
 		if b.Charging {
 			b.botRelease -= dt
 			if b.botRelease <= 0 {
@@ -583,6 +599,10 @@ func (g *Game) handle(c *Client, m inMsg) {
 		if p := c.player; p != nil && !p.Falling && p.DashCD == 0 && !p.Charging {
 			p.Charging, p.ChargeT = true, 0
 		}
+	case "jump":
+		if c.player != nil {
+			c.player.WantJump = true
+		}
 	case "dash":
 		if c.player != nil {
 			c.player.WantDash = true
@@ -671,6 +691,9 @@ func (g *Game) snapshot() []byte {
 	msg := map[string]any{
 		"t": "s", "now": r2(g.now), "r": r2(g.radius),
 		"ph": g.phase, "tl": r2(math.Max(0, g.phaseT)), "p": ps, "c": g.crateList(), "cw": g.crownID,
+	}
+	if g.sweepOn {
+		msg["sw"] = [2]float64{r2(g.sweepA), r2(g.sweepHalf())}
 	}
 	if len(g.events) > 0 {
 		msg["e"] = g.events

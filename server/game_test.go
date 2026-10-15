@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"testing"
 )
 
@@ -135,5 +136,60 @@ func TestChargedDashGoesFurther(t *testing.T) {
 	tap, full := travel(0), travel(chargeMax)
 	if full < tap*1.5 {
 		t.Fatalf("full charge travelled %.2f, tap %.2f", full, tap)
+	}
+}
+
+func sweepGame(t *testing.T) (*Game, *Player) {
+	t.Helper()
+	g := NewGame("", 0, 120)
+	g.phaseT = 20
+	g.sweepDir = 1
+	g.sweepA = -0.05
+	p := g.newPlayer("p", 0, 0, false)
+	p.X, p.Z, p.Ghost = 4, 0, 0
+	return g, p
+}
+
+func countEvents(g *Game, kind string) int {
+	n := 0
+	for _, e := range g.events {
+		if e["k"] == kind {
+			n++
+		}
+	}
+	return n
+}
+
+func TestLogHitsGroundedPlayer(t *testing.T) {
+	g, p := sweepGame(t)
+	for i := 0; i < 10; i++ {
+		g.updateSweeper(1.0 / tickRate)
+	}
+	if countEvents(g, "swh") == 0 || p.VZ <= 0 {
+		t.Fatalf("grounded player must be swept along the log's motion, vz=%.2f", p.VZ)
+	}
+}
+
+func TestLogMissesJumpingPlayer(t *testing.T) {
+	g, p := sweepGame(t)
+	p.Y, p.Airborne = logClear+0.2, true
+	for i := 0; i < 10; i++ {
+		g.updateSweeper(1.0 / tickRate)
+	}
+	if countEvents(g, "swh") != 0 || p.VZ != 0 {
+		t.Fatal("a player above the log must not be hit")
+	}
+}
+
+func TestHeavyResistsLog(t *testing.T) {
+	g, p := sweepGame(t)
+	g.updateSweeper(4.0 / tickRate)
+	light := math.Hypot(p.VX, p.VZ)
+
+	g2, h := sweepGame(t)
+	h.Pow = powHeavy
+	g2.updateSweeper(4.0 / tickRate)
+	if heavy := math.Hypot(h.VX, h.VZ); heavy >= light {
+		t.Fatalf("heavy %.2f should be pushed less than light %.2f", heavy, light)
 	}
 }

@@ -107,6 +107,7 @@ func (g *Game) givePower(p *Player, c *Crate) {
 		p.Pow, p.PowT = powBounce, bounceTime
 	case powPound:
 		p.PoundT = poundAir
+		p.Airborne, p.VY = false, 0
 		p.Charging, p.ChargeT = false, 0
 	}
 	g.events = append(g.events, map[string]any{"k": "pk", "i": p.ID, "c": c.Kind})

@@ -311,6 +311,10 @@ export class Blob {
       const sp = Math.hypot(s.x - this.prev.x, s.z - this.prev.z) / dt;
       this.speed += (sp - this.speed) * Math.min(1, dt * 10);
       if (this.prev.y > -0.75 && s.y <= -0.75) result = 'splash';
+      if (this.prev.y > 0.05 && s.y <= 0.01 && !(s.flags & 4)) {
+        result = 'land';
+        this.jellyV += 5;
+      }
     }
     this.prev = { x: s.x, y: s.y, z: s.z };
 
@@ -341,10 +345,12 @@ export class Blob {
     if (dashing) { sx *= 0.86; sy *= 0.88; sz *= 1.25; }
     sx *= 1 + 0.12 * charge; sy *= 1 - 0.22 * charge; sz *= 1 + 0.12 * charge;
     if (pounding) { sx *= 0.9; sy *= 0.8; sz *= 0.9; }
+    const airborne = s.y > 0.05 && !falling && !pounding;
+    if (airborne) { sx *= 0.94; sy *= 1.12; sz *= 0.94; }
     this.pivot.scale.set(sx, sy, sz);
 
     const move = Math.min(this.speed / 7, 1);
-    const hop = falling ? 0 : Math.abs(Math.sin(t * 13 + this.seed)) * 0.14 * move;
+    const hop = falling || airborne ? 0 : Math.abs(Math.sin(t * 13 + this.seed)) * 0.14 * move;
     this.pivot.position.y = 0.72 + hop;
     if (falling) {
       this.pivot.rotation.x += dt * 9;

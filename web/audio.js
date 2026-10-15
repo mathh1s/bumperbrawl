@@ -94,6 +94,10 @@ export const sfx = {
   fell() {
     tone(500, 120, 0.5, { type: 'triangle', vol: 0.3 });
   },
+  jump() {
+    tone(240, 560, 0.16, { type: 'sine', vol: 0.3 });
+    tone(480, 1100, 0.1, { type: 'triangle', vol: 0.08 });
+  },
   pickup() {
     [659, 880, 1175].forEach((f, i) => tone(f, f, 0.14, { type: 'triangle', vol: 0.22, delay: i * 0.06 }));
   },
