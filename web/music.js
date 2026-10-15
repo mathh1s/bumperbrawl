@@ -27,7 +27,7 @@ export class Music {
   async load() {
     this.meta = await (await fetch('music/tracks.json')).json();
     // menu first so something plays quickly, the rest streams in behind it
-    for (const name of ['menu', 'jam', 'wobble', 'gumball', 'sugar', 'final', 'victory']) {
+    for (const name of ['menu', 'jam', 'wobble', 'gumball', 'sugar', 'victory']) {
       const data = await (await fetch(this.meta[name].file)).arrayBuffer();
       this.buffers[name] = await new Promise((res, rej) => this.ctx.decodeAudioData(data, res, rej));
     }
@@ -40,17 +40,53 @@ export class Music {
     if (!buffer) return;
     this.fadeOut();
     const now = this.ctx.currentTime;
-    const src = this.ctx.createBufferSource();
-    src.buffer = buffer;
-    src.loop = true;
-    src.loopStart = this.meta[name].loopStart;
-    src.loopEnd = this.meta[name].loopEnd;
+    const meta = this.meta[name];
     const gain = this.ctx.createGain();
     gain.gain.setValueAtTime(0, now);
     gain.gain.linearRampToValueAtTime(1, now + FADE);
-    src.connect(gain).connect(this.bus);
-    src.start(now);
-    this.current = { name, src, gain };
+    gain.connect(this.bus);
+    this.current = { name, gain, srcs: [], start: now, final: false };
+    // round songs play their intro once and then repeat the loop; the menu is a plain loop
+    if (meta.intro) this.voice(meta.loop, meta.intro[0], now);
+    else this.voice([meta.loopStart, meta.loopEnd], 0, now);
+  }
+
+  // one pass through the song's file, looping between the two times in loop
+  voice(loop, offset, at) {
+    const cur = this.current;
+    const src = this.ctx.createBufferSource();
+    src.buffer = this.buffers[cur.name];
+    src.loop = true;
+    [src.loopStart, src.loopEnd] = loop;
+    const fade = this.ctx.createGain();
+    src.connect(fade).connect(cur.gain);
+    src.start(at, offset);
+    cur.srcs.push({ src, fade });
+  }
+
+  // Idempotent: sends a round song into its final part at the next bar line, through the switch
+  final() {
+    const cur = this.current;
+    const meta = cur && this.meta[cur.name];
+    if (!meta?.final || cur.final) return;
+    cur.final = true;
+    const now = this.ctx.currentTime;
+    const intro = meta.intro[1] - meta.intro[0];
+    // how far into the playing part we are; the intro and the loop both start on a bar line
+    let into = now - cur.start;
+    if (into >= intro) into = (into - intro) % (meta.loop[1] - meta.loop[0]);
+    let wait = Math.ceil(into / meta.bar - 1e-6) * meta.bar - into;
+    if (wait < 0.05) wait += meta.bar;
+    const at = now + wait;
+    for (const { src, fade } of cur.srcs) {
+      // a few milliseconds of fade so cutting mid waveform doesn't click
+      fade.gain.setValueAtTime(1, at);
+      fade.gain.linearRampToValueAtTime(0, at + 0.012);
+      src.stop(at + 0.02);
+    }
+    cur.srcs = [];
+    // the switch sits right before the final in the file, so playback runs from one into the other
+    this.voice(meta.final, meta.switch[0], at);
   }
 
   victory() {
@@ -66,12 +102,12 @@ export class Music {
 
   fadeOut(seconds = FADE) {
     if (!this.current) return;
-    const { src, gain } = this.current;
+    const { srcs, gain } = this.current;
     const now = this.ctx.currentTime;
     gain.gain.cancelScheduledValues(now);
     gain.gain.setValueAtTime(gain.gain.value, now);
     gain.gain.linearRampToValueAtTime(0, now + seconds);
-    src.stop(now + seconds + 0.05);
+    for (const { src } of srcs) src.stop(now + seconds + 0.05);
     this.current = null;
   }
 

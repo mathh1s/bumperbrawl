@@ -773,7 +773,6 @@ const ROUND_TRACKS = ['jam', 'wobble', 'gumball', 'sugar'];
 
 function pickTrack(view) {
   if (!joined || !view || view.ph !== 0) return 'menu';
-  if (view.tl <= 30) return 'final';
   // the round themes take turns so a match doesn't loop one song
   return ROUND_TRACKS[((latest?.rn ?? 1) - 1) % ROUND_TRACKS.length];
 }
@@ -1114,6 +1113,8 @@ function frame(now) {
   updateCamera(dt, view);
   updateHud(dt, view);
   music.play(pickTrack(view));
+  // the last 30 seconds of a round play the round song's own final part
+  if (joined && view?.ph === 0 && view.tl <= 30) music.final();
   if (podium.active && joined) podium.render(renderer, dt);
   else renderer.render(scene, camera);
   if (!joined) preview.render(dt);

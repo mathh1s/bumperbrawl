@@ -75,7 +75,9 @@ few songs, the MuseScore General soundfont (MIT; S. Christian Collins, based on 
 victory jingle, [GeneralUser GS](https://github.com/mrbumpy409/GeneralUser-GS). Every song has its own kit, synths,
 room and finish: lo-fi tape funk for the menu, a horn band, an 8 bit console, a circus folk band, lo-fi electronica
 with vocal chops, and a rave against an orchestra for the last 30 seconds.
-There are four round themes that take turns, plus the menu, the last 30 seconds and the victory jingle. To change or regenerate it:
+There are four round themes that take turns, plus the menu and the victory jingle. Each round theme is one file
+in four parts: an intro that plays once, the main loop, a switch, and a final loop. With 30 seconds left the
+game jumps on the next bar line into the switch, which runs into that song's final (`web/music.js`). To change or regenerate it:
 
 ```sh
 pip install --no-deps tinysoundfont && pip install numpy scipy numba
@@ -84,7 +86,7 @@ curl -Lo /tmp/msg.sf2 https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_G
 python3 tools/music/compose.py /tmp/gugs/GeneralUser-GS.sf2 /tmp/msg.sf2
 ```
 
-This rewrites the mp3 files and `web/music/tracks.json` (loop points). The sound effects in `web/sfx/` come from
+This rewrites the mp3 files and `web/music/tracks.json` (loop points and section times). The sound effects in `web/sfx/` come from
 `python3 tools/music/sfx.py /tmp/gugs/GeneralUser-GS.sf2` the same way. ffmpeg with libmp3lame is required.
 
 ## Layout

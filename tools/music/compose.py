@@ -96,6 +96,11 @@ class Song:
         self.sf_level = None
         self.lifts = []
         self.swing = 0.0
+        # round songs: part -> (first bar, bar after the last), see render_sections()
+        self.sections = {}
+        # set while rendering sections so every part uses the gains and peak of the whole song
+        self.gains = None
+        self.peak = None
         # reverb length, decay and send; every song gets its own room
         self.room = (1.7, 0.38, 0.22)
         self.color = []
@@ -257,25 +262,34 @@ def render(song, soundfont, repeats, tail=3.0):
             part.events = [e for e in song.events if e[2] == ch]
             part.channels = {ch: song.channels[ch]}
             stem, loop_samples = render_dry(part, soundfont, repeats, tail)
-            stems.append((stem, song.levels[ch]))
+            stems.append((ch, stem, song.levels[ch]))
     else:
         part = copy.copy(song)
         part.events = [e for e in song.events if e[2] in song.channels]
         stem, loop_samples = render_dry(part, soundfont, repeats, tail)
-        stems.append((stem, song.sf_level))
-    total = len(stems[0][0])
+        stems.append(("sf", stem, song.sf_level))
+    total = len(stems[0][1])
     for name, (patch, fx) in song.synths.items():
         events = [(b, d, k, v) for b, d, ch, k, v in song.events if ch == name]
-        stems.append((render_part(events, patch, fx, song.bpm, loop_samples, repeats, total), song.levels[name]))
+        stems.append((name, render_part(events, patch, fx, song.bpm, loop_samples, repeats, total), song.levels[name]))
     dry = None
-    for stem, level in stems:
-        if level is not None:
-            stem = stem * 10 ** ((level - active_rms_db(stem)) / 20)
+    gains = {}
+    for name, stem, level in stems:
+        if song.gains is not None:
+            gains[name] = song.gains.get(name, 1.0)
+        elif level is not None and stem.any():
+            gains[name] = 10 ** ((level - active_rms_db(stem)) / 20)
+        else:
+            gains[name] = 1.0
+        stem = stem * gains[name]
         dry = stem if dry is None else dry + stem
+    song.measured = gains
     seconds, decay, send = song.room
     ir = reverb_ir(seconds, decay)
     wet = np.stack([oaconvolve(dry[:, c], ir[:, c])[: len(dry)] for c in range(2)], axis=1)
-    return colour(dry + wet * send, song), loop_samples
+    mix = dry + wet * send
+    song.measured_peak = np.abs(mix).max()
+    return colour(mix, song), loop_samples
 
 
 def colour(audio, song):
@@ -289,7 +303,7 @@ def colour(audio, song):
             bits, rate = args
             hold = np.maximum(1, round(SR / rate))
             idx = (np.arange(n) // hold) * hold
-            peak = np.abs(audio).max()
+            peak = song.peak or np.abs(audio).max()
             q = 2 ** (bits - 1)
             audio = np.round(audio[idx] / peak * q) / q * peak
         elif kind == "tape":
@@ -304,7 +318,7 @@ def colour(audio, song):
             from synth import _svf
             audio = np.stack([_svf(audio[:, c], np.full(n, float(args[0])), 0.7, 0) for c in range(2)], axis=1)
         elif kind == "drive":
-            audio = np.tanh(audio / np.abs(audio).max() * args[0])
+            audio = np.tanh(audio / (song.peak or np.abs(audio).max()) * args[0])
     return audio
 
 
@@ -363,6 +377,43 @@ def render_loop(song, soundfont, name):
     cut = master(audio)[loop - pad: 2 * loop + pad]
     encode(cut, name)
     return {"file": f"music/{name}.mp3", "loopStart": pad / SR, "loopEnd": (pad + loop) / SR}
+
+
+def section(song, first, end):
+    part = copy.copy(song)
+    part.events = [(b - first * 4, *rest) for b, *rest in song.events if first * 4 <= b < end * 4]
+    part.bars = end - first
+    return part
+
+
+def render_sections(song, soundfont, name):
+    """A round song as one file of four parts: the intro plays once, the loop repeats, and when the round
+    is nearly over the game jumps on a bar line into the switch, which runs straight into the final loop.
+
+    The loop and the final are cut from the middle of a three times render like render_loop(), so they wrap
+    without a seam. Stem levels and the colour stage are measured once on the whole song and shared by all
+    parts, so a quiet intro stays quiet instead of being turned up to match the loop."""
+    render(song, soundfont, repeats=1, tail=0.5)
+    song.gains, song.peak = song.measured, song.measured_peak
+    parts = {}
+    for part in ("intro", "loop", "switch", "final"):
+        first, end = song.sections[part]
+        cyclic = part in ("loop", "final")
+        audio, length = render(section(song, first, end), soundfont, repeats=3 if cyclic else 1, tail=3.0 if cyclic else 0.0)
+        parts[part] = audio[length: 2 * length] if cyclic else audio[:length]
+    gain = 0.12 / np.sqrt((parts["loop"] ** 2).mean())
+    pad = np.zeros((int(PAD * SR), 2))
+    meta = {"file": f"music/{name}.mp3", "bar": 4 * 60 / song.bpm}
+    out, pos = [pad], len(pad)
+    for part in ("intro", "loop", "switch", "final"):
+        x = np.tanh(parts[part] * gain * 1.15) / np.tanh(1.15) * 0.84
+        meta[part] = [pos / SR, (pos + len(x)) / SR]
+        out.append(x)
+        pos += len(x)
+    # trailing silence so the decoder never trims the end of the final loop
+    out.append(pad)
+    encode(np.concatenate(out), name)
+    return meta
 
 
 def render_once(song, soundfont, name):
@@ -928,135 +979,6 @@ def sugar():
     return s
 
 
-def final():
-    """Crumble!: the last thirty seconds, D minor electro at 172, all synth, flat out from the first beat.
-    A sixteenth note ostinato and a driving eighth note bass never stop, like the old orchestral version,
-    while the beat switches underneath and the layers pile up: four on the floor with the hook on a
-    supersaw, then jungle breaks with a reese bass and a hoover taking the hook into new chords, a half
-    time stomp with a snare roll, and a hardcore finish a whole step up with the hook in sixteenths
-    and the singers on top."""
-    s = Song(172, 24)
-    s.room = (1.3, 0.3, 0.16)
-    s.color = [("drive", 1.3)]
-    s.kit("crumble", {
-        "kick": (kick(52, punch=34, decay=0.26, click=0.1, drive=1.2), -13, {}),
-        "boom": (kick(44, punch=14, decay=0.7, click=0.05, drive=1.0), -14, {}),
-        "snare": (snare(220, decay=0.15, snap=1.2, tone=0.5, bright=7000), -17, {}),
-        "clap": (clap(0.17, 1300), -19, {}),
-        "hat": (hat(0.03, bright=9000), -25, {}),
-        "ohat": (hat(0.2, bright=8000, metal=0.9), -24, {}),
-        "ride": (hat(0.5, bright=5500, metal=1.0), -27, {}),
-        "crash": (hat(1.0, bright=4500, metal=1.0), -23, {}),
-        "tick": (click(3400, 0.01), -24, {}),
-    })
-    # every synth here starts dead on the note: no slow attacks, scoops or glides that drag it late
-    s.synth("ost", {"osc": [(PULSE, 0, 1.0), (SAW, 0, 0.5)], "pw": 0.35, "amp": (0.001, 0.09, 0.15, 0.04),
-                    "cutoff": 1400, "env_oct": 2.2, "filt": (0.001, 0.07, 0.0, 0.04), "res": 1.6, "keytrack": 0.4},
-            -18, {"hp": 180, "width": 1.2})
-    s.synth("bass", {"osc": [(SAW, 0, 1.0), (PULSE, 0, 0.4)], "sub": 0.6, "amp": (0.001, 0.15, 0.6, 0.03),
-                     "cutoff": 300, "env_oct": 2.6, "filt": (0.001, 0.1, 0.0, 0.04), "res": 1.5, "drive": 0.7},
-            -16, {"sidechain": (0.3, 0.25)})
-    s.synth("reese", {"osc": [(SAW, 0, 1.0), (SAW, 0.18, 1.0), (SAW, -12, 0.5)], "sub": 0.7,
-                      "amp": (0.002, 0.3, 0.9, 0.04), "cutoff": 800, "res": 1.3, "lfo": (2, 1.2, 0), "drive": 1.0},
-            -15, {"sidechain": (0.35, 0.25)})
-    s.synth("lead", {"osc": [(SAW, 0, 1.0), (SAW, 12, 0.3)], "unison": 7, "detune": 30, "spread": 0.8,
-                     "amp": (0.001, 0.2, 0.75, 0.05), "cutoff": 4200, "keytrack": 0.3, "res": 1.0,
-                     "vib": (6, 14, 0.25)}, -17, {"hp": 250})
-    s.synth("hoover", {"osc": [(SAW, 0, 1.0), (PULSE, -12, 0.6)], "unison": 5, "detune": 40, "spread": 1.0,
-                       "pwm": 0.3, "pwm_rate": 2.0, "pitch": (-2, 0.012), "amp": (0.001, 0.25, 0.85, 0.05),
-                       "cutoff": 2800, "res": 1.2, "drive": 0.8}, -16, {"hp": 120, "width": 1.2})
-    s.synth("stab", {"osc": [(SAW, 0, 1.0)], "unison": 7, "detune": 38, "spread": 0.9,
-                     "amp": (0.001, 0.18, 0.25, 0.08), "filt": (0.001, 0.14, 0.15, 0.08), "cutoff": 1000,
-                     "env_oct": 2.6, "res": 0.9}, -20, {"sidechain": (0.6, 0.3), "hp": 180, "width": 1.3})
-    vox = {"osc": [(PULSE, 0, 1.0), (SAW, 0, 0.6)], "pw": 0.3, "formant": "ua", "amp": (0.001, 0.1, 0.7, 0.04),
-           "vib": (6, 12, 0.1), "drive": 0.3}
-    s.synth("vox", vox, -19, {"hp": 250})
-    s.synth("vox2", {**vox, "formant": "ia"}, -22, {"hp": 250, "width": 1.4})
-    s.synth("rise", riser(8 * 60 / 172), -24, {"hp": 200})
-    s.synth("impact", {"osc": [(SINE, 0, 1.0)], "amp": (0.001, 1.0, 0.0, 0.3), "pitch": (24, 0.15),
-                       "cutoff": 3000, "drive": 0.5}, -16, {})
-    s.lift(16, 23, 2)
-
-    first = ["Dm", "Bb", "F", "C", "Gm", "Bb", "A", "A7"]
-    breaks = ["Gm", "Bb", "Dm", "A7", "Gm", "A7"]
-    stomp = ["Bb", "A7"]
-    last = ["Dm", "Bb", "F", "C", "Gm", "Bb", "Gm A7", "Dm"]
-    prog = first + breaks + stomp + last
-
-    hook = ["D5 - F5 A5 - G5 F5 E5", "D5 - - - Bb4 - D5 F5", "C5 - F5 A5 - G5 F5 E5", "E5 - - - C5 - E5 G5",
-            "Bb5 - A5 G5 - F5 G5 A5", "F5 - D5 Bb4 - D5 F5 Bb5", "A5 - - - E5 - C#5 E5", "A5 G5 F5 E5 C#5 - - -"]
-    turn = ["G5 - Bb5 D6 - C6 Bb5 A5", "F5 - - - D5 - F5 Bb5", "A5 - D6 F6 - E6 D6 A5", "E5 - - - C#5 - E5 G5",
-            "Bb5 - A5 G5 - F5 G5 A5", "A5 G5 F5 E5 C#5 - E5 -"]
-    hook16 = ["D5 . D5 F5 . A5 . D6 - - C6 - A5 - F5 -", "D5 . D5 F5 . Bb5 . D6 - - C6 - Bb5 - F5 -",
-              "C5 . C5 F5 . A5 . C6 - - Bb5 - A5 - F5 -", "E5 . E5 G5 . C6 . E6 - - D6 - C6 - G5 -",
-              "Bb5 . Bb5 D6 . G6 . F6 - - E6 - D6 - Bb5 -", "D6 . D6 F6 . Bb6 . A6 - - G6 - F6 - D6 -",
-              "Bb5 - A5 - G5 - Bb5 - C#6 - - - E6 - - -", "D6 - - - A5 - F5 - D6 - - - . . . ."]
-
-    for bar, chord in enumerate(prog):
-        main = chord.split()[0]
-        # the engine of the track: sixteenths that never stop, an octave higher for the finish
-        tones = voicing(main, 62 if bar < 16 else 74)
-        for j in range(16):
-            k = tones[[0, 0, 2, 0, 1, 0, 2, 0][j % 8]] + (12 if j % 8 == 2 else 0)
-            s.note("ost", bar * 4 + j * 0.25, 0.2, k, 96 if j % 4 == 0 else 76)
-        if 8 <= bar < 14:
-            for start, ch, span in s.spans(bar, chord):
-                s.note("reese", start, span * 0.98, bass_root(ch, 1) + 12, 106)
-        elif 14 <= bar < 16:
-            s.bass("bass", bar, chord, "R - - R - - R -", 110)
-        else:
-            s.bass("bass", bar, chord, "R R 8 R R R 8 R", 108)
-
-    for i in range(8):
-        s.line("lead", i, hook[i], 102, legato=0.85)
-        s.chords("stab", i, prog[i], [1, 3, 5, 7], 0.2, 67, 88)
-        s.line("lead", 16 + i, hook16[i], 106, step=0.25, legato=0.85)
-        s.line("vox", 16 + i, hook16[i], 90, step=0.25, legato=0.6, octave=-1)
-        s.chords("stab", 16 + i, prog[16 + i], [1, 3, 5, 7], 0.2, 67, 104)
-        s.hits("vox2", 16 + i, prog[16 + i], "..2...2...2...2.", 79, 80, dur=0.1)
-    for i in range(6):
-        s.line("hoover", 8 + i, turn[i], 104, legato=0.9)
-        if i % 2 == 1:
-            s.hits("vox2", 8 + i, prog[8 + i], "........ ....4.2.", 74, 88, dur=0.12)
-    s.line("vox", 14, "D6 - - - A5 - - -", 100, legato=0.9)
-    s.line("vox", 15, "C#6 - - - E6 - - -", 104, legato=0.9)
-    s.note("rise", 14 * 4, 8, 60, 120)
-    for at in (0, 8, 16):
-        s.note("impact", at * 4, 4, midi("D1"), 120)
-
-    for bar in range(24):
-        if bar < 8:
-            p = {"kick": "X...X...X...X...", "snare": "....X.......X...", "hat": "xoxoxoxoxoxoxoxo",
-                 "tick": "..o...o...o...o."}
-            if bar in (0, 4):
-                p["crash"] = "X..............."
-            if bar == 7:
-                p["snare"] = "....X...xxxxXXXX"
-        elif bar < 14:
-            p = {"kick": "X.X.......X..X..", "snare": "....X..o.o..X..o", "hat": "xxxxxxxxxxxxxxxx",
-                 "ride": "x...x...x...x...", "boom": "X..............."}
-            if bar % 2:
-                p.update(kick="X.........XX....", snare="....X..o.o.oX.o.")
-            if bar in (8, 12):
-                p["crash"] = "X..............."
-        elif bar == 14:
-            p = {"boom": "X.......X.......", "clap": "....X.......X...", "hat": "xxxxxxxxxxxxxxxx",
-                 "crash": "X..............."}
-        elif bar == 15:
-            s.beat(bar, {"boom": "X...............................",
-                         "snare": "x.x.x.x.x.x.x.x.xxxxxxxxXXXXXXXX"}, "crumble", step=0.125)
-            continue
-        else:
-            p = {"kick": "X...X...X...X...", "clap": "....X.......X...", "ohat": "..X...X...X...X.",
-                 "hat": "x.x.x.x.x.x.x.x.", "snare": "..o....o.o....o."}
-            if bar % 2 == 0:
-                p["crash"] = "X..............."
-            if bar == 23:
-                p["snare"] = "....X...xxxxXXXX"
-        s.beat(bar, p, "crumble")
-    return s
-
-
 def victory():
     """Round winner fanfare in the same funk palette as the round theme."""
     s = Song(120, 3)
@@ -1089,16 +1011,31 @@ def victory():
     return s
 
 
+def placeholder_sections(song):
+    # stand in parts cut from a song written before sections existed, until it is rebuilt with its own
+    n = song.bars
+    song.sections = {"intro": (0, 2), "loop": (0, n), "switch": (n - 1, n), "final": (n - 8, n)}
+    return song
+
+
 def main():
     if len(sys.argv) != 3:
         sys.exit("usage: compose.py GeneralUser-GS.sf2 MuseScore_General.sf2")
     gugs, msg = sys.argv[1:]
     tracks = {}
-    for name, make, sf, once in [("menu", menu, msg, False), ("jam", jam, msg, False), ("wobble", wobble, msg, False),
-                                 ("gumball", gumball, msg, False), ("sugar", sugar, msg, False), ("final", final, msg, False), ("victory", victory, gugs, True)]:
+    for name, make, sf in [("menu", menu, msg), ("jam", jam, msg), ("wobble", wobble, msg),
+                           ("gumball", gumball, msg), ("sugar", sugar, msg), ("victory", victory, gugs)]:
         # seeded per track so changing one track leaves the others' humanizing alone
         random.seed(name)
-        tracks[name] = (render_once if once else render_loop)(make(), sf, name)
+        song = make()
+        if name == "victory":
+            tracks[name] = render_once(song, sf, name)
+        elif name == "menu":
+            tracks[name] = render_loop(song, sf, name)
+        else:
+            if not song.sections:
+                placeholder_sections(song)
+            tracks[name] = render_sections(song, sf, name)
     (OUT / "tracks.json").write_text(json.dumps(tracks, indent=2) + "\n")
     for name, t in tracks.items():
         print(name, t)
