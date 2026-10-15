@@ -99,6 +99,7 @@ web/     main.js   netcode, interpolation, camera, HUD
          lobby.js    private room lobby panel
          rank.js     rating tiers and the per-browser player key
          emotes.js   emote bubbles
+         timewarp.js hit-stop and slow motion on the render clock
          ball.js     Blob Ball stadium, goals and ball
          world.js  sky, water, crumbling island, scenery
          blobs.js    player characters and hats

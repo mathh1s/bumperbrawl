@@ -8,6 +8,7 @@ import { HillRing } from './hill.js';
 import { Coins } from './coins.js';
 import { BallPitch } from './ball.js';
 import { Bubbles, EMOTES } from './emotes.js';
+import { TimeWarp } from './timewarp.js';
 import { FX } from './fx.js';
 import { Crates, POWERS } from './crates.js';
 import { modeOf, OUT, TEAMS } from './modes.js';
@@ -49,6 +50,10 @@ const coins = new Coins(scene, ramp);
 const pitch = new BallPitch(scene, ramp);
 const bubbles = new Bubbles($('bubbles'));
 const bubbleVec = new THREE.Vector3();
+const warp = new TimeWarp();
+// the last knockout, so a round that ends on one can replay it slowly
+let lastKo = null;
+let focus = null;
 const lastScores = new Map();
 const arrowPos = new THREE.Vector3();
 sweeper.onLand = () => {
@@ -252,9 +257,15 @@ function fireEvents(rt, view) {
         }
         const near = me ? Math.hypot(me.x - e.x, me.z - e.z) < 2 : false;
         if (joined) sfx.bump(e.p, near);
+        // a big hit you're part of freezes the picture for a few frames, so it lands
+        if (joined && near && e.p >= 16) {
+          warp.hitStop(performance.now(), 75);
+          shake = Math.max(shake, 0.35);
+        }
         break;
       }
       case 'ko': {
+        lastKo = { id: e.v, rt };
         const a = `<b>${esc(nameOf(e.a))}</b>`, v = `<b>${esc(nameOf(e.v))}</b>`;
         addFeed(!e.a ? `${v} fell off` : e.cr ? `${a} dethroned ${v} <span class="bounty">+2</span>` : `${a} bonked ${v}`);
         if (!joined || podium.active) break;
@@ -381,6 +392,13 @@ function fireEvents(rt, view) {
       }
       case 'end': {
         lastEnd = e;
+        // a round decided by a knockout plays that fall in slow motion, close up, before the results
+        const replay = lastKo && rt - lastKo.rt < 1200;
+        if (replay) {
+          warp.slowMo(performance.now(), 1300, 0.3);
+          focus = { id: lastKo.id, until: performance.now() + 1700 };
+        }
+        lastKo = null;
         if (!joined) break;
         const mode = modeOf(e.m);
         let text;
@@ -403,15 +421,21 @@ function fireEvents(rt, view) {
         } else {
           text = e.w ? `${esc(e.w)} ${verb(e.w)} round ${e.r}!<small>${mode.unit(e.s)}</small>` : `Round ${e.r} over!<small>nobody scored</small>`;
         }
-        if (e.top?.length) {
-          podium.show(e.top, e.mo ? '★' : '');
-          banner(text, e.mo ? 9000 : 6500, 'high');
-        } else {
-          banner(text, 4000);
-        }
-        showStandings(e.st ?? [], e.mo);
-        if (e.mo) showAwards(e.aw ?? []);
-        music.victory();
+        const reveal = () => {
+          // a new round may already have started if the break was cut short
+          if (lastEnd !== e) return;
+          if (e.top?.length) {
+            podium.show(e.top, e.mo ? '★' : '');
+            banner(text, e.mo ? 9000 : 6500, 'high');
+          } else {
+            banner(text, 4000);
+          }
+          showStandings(e.st ?? [], e.mo);
+          if (e.mo) showAwards(e.aw ?? []);
+          music.victory();
+        };
+        if (replay) setTimeout(reveal, 1500);
+        else reveal();
         break;
       }
     }
@@ -919,7 +943,15 @@ function updateCamera(dt, view) {
   const dist = portrait ? 1.6 : 1;
   let me = joined && view ? view.players.get(myId) : null;
   if (me && me.flags & OUT) me = spectateTarget(view) ?? me;
-  if (me) {
+  const close = focus && performance.now() < focus.until ? view?.players.get(focus.id) : null;
+  if (!close) focus = null;
+  if (close) {
+    // slow motion swoops in on the blob that just went off
+    const k = 1 - Math.exp(-dt * 3);
+    camTarget.lerp(new THREE.Vector3(close.x, 0, close.z), k);
+    camera.position.lerp(new THREE.Vector3(camTarget.x, 6.5 * dist, camTarget.z + 9 * dist), k);
+    lookAt.lerp(new THREE.Vector3(camTarget.x, Math.max(close.y, -2), camTarget.z - 1), k);
+  } else if (me) {
     // the pitch is wider than the island, so follow further out to keep the goals in view
     const follow = view.pt ? 0.8 : 0.6;
     if (!(me.flags & 4)) camTarget.set(me.x * follow, 0, me.z * follow);
@@ -952,7 +984,9 @@ function frame(now) {
   t += dt;
 
   if (joined && predictor) predictor.update(raw, input.vector());
-  const rt = now - INTERP_MS;
+  const rt = now - INTERP_MS - warp.update(now, raw * 1000);
+  // animations follow the bent clock too, so a hit-stop really holds still
+  const adt = dt * warp.scale;
   const view = sample(rt);
   applyPrediction(view);
   fireEvents(rt, view);
@@ -971,7 +1005,7 @@ function frame(now) {
         const a = Math.random() * Math.PI * 2;
         fx.burst(s.x + Math.sin(a) * 0.9, 0.4 + Math.random(), s.z + Math.cos(a) * 0.9, { colors: ['#ffd43b', '#fff6c4'], n: 2, speed: 0.6, up: 2, size: 0.09, life: 0.4, gravity: 2 });
       }
-      const happened = b.update(s, dt, t);
+      const happened = b.update(s, adt, t);
       if (happened === 'land') {
         fx.puff(s.x, s.z);
         if (joined && id === myId) sfx.land();
@@ -1012,7 +1046,7 @@ function frame(now) {
   if (view?.hl) popHillPoints(view);
   // the same edge arrow points at the ball when it is off screen
   pointToHill(view?.hl ?? (view?.bl && !view.bl[3] ? [view.bl[0], view.bl[1]] : null));
-  fx.update(dt);
+  fx.update(adt);
   updateCamera(dt, view);
   updateHud(dt, view);
   music.play(pickTrack(view));
