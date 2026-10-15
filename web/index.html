@@ -49,6 +49,14 @@
       <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false">
       <div id="colors"></div>
       <button id="play" type="submit">Play</button>
+      <div class="rooms">
+        <button type="button" id="friendsBtn" class="ghost">Play with friends</button>
+        <div id="roomInfo" hidden>
+          <span>Room <b id="roomCode"></b></span>
+          <button type="button" id="inviteBtn" class="ghost small">Invite</button>
+          <a href="/">Leave</a>
+        </div>
+      </div>
       <p class="keys"><kbd>WASD</kbd> move &nbsp;·&nbsp; <kbd>Space</kbd> dash</p>
       <p id="status">Connecting…</p>
     </form>

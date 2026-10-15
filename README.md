@@ -6,6 +6,10 @@ A small online 3D party brawler. Everyone is a squishy blob on a floating hex is
 - Client: Three.js (vendored, no CDN), toon-shaded low-poly look, snapshot interpolation
 - Bots top the lobby up to `MIN_PLAYERS` whenever at least one human is playing
 - Works on desktop (WASD / arrows + Space or Shift to dash) and touch (virtual stick + dash button)
+- Hold dash to charge a stronger launch; tap for a quick one
+- Power-up crates: heavy, bouncy and ground pound
+- The leader wears a crown worth 2 points to whoever knocks them off; rounds end on a podium
+- Private rooms: "Play with friends" creates a room at `/?room=CODE` to share; empty rooms close after a minute
 
 ## Run with Docker
 

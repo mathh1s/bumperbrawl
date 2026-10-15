@@ -13,6 +13,9 @@ const INTERP_MS = 110;
 const ARENA_MAX = 15;
 const $ = (id) => document.getElementById(id);
 
+const requestedRoom = (new URLSearchParams(location.search).get('room') ?? '').toUpperCase();
+const ROOM = /^[A-Z]{4,6}$/.test(requestedRoom) ? requestedRoom : '';
+
 // ==== renderer and scene ====
 
 const canvas = $('game');
@@ -57,7 +60,7 @@ let latest = null;
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss' : 'ws';
-  ws = new WebSocket(`${proto}://${location.host}/ws`);
+  ws = new WebSocket(`${proto}://${location.host}/ws${ROOM ? `?room=${ROOM}` : ''}`);
   ws.onopen = () => {
     setStatus('');
     $('play').disabled = false;
@@ -96,7 +99,7 @@ function onMessage(m) {
       break;
     case 'full':
       wantJoin = null;
-      setStatus('Server is full, try again in a bit.');
+      setStatus(m.why === 'rooms' ? 'Too many rooms open right now, try the public one.' : 'This room is full, try again in a bit.');
       break;
     case 's':
       onSnapshot(m);
@@ -319,7 +322,8 @@ function updateHud(dt, view) {
     .filter(([id]) => roster.has(id))
     .sort((a, b) => b[1].score - a[1].score)
     .slice(0, 8);
-  $('board').innerHTML = rows.map(([id, p]) => {
+  const roomRow = ROOM ? `<li class="room" data-invite>Room <b>${ROOM}</b> · invite</li>` : '';
+  $('board').innerHTML = roomRow + rows.map(([id, p]) => {
     const r = roster.get(id);
     const crown = id === latest.cw ? CROWN_SVG : '';
     return `<li class="${id === myId ? 'me' : ''}"><span class="dot" style="background:${PALETTE[r.c]}"></span>`
@@ -430,6 +434,47 @@ function pickTrack(view) {
   if (!joined || !view || view.ph === 1) return 'menu';
   return view.tl <= 30 ? 'final' : 'battle';
 }
+
+// ==== rooms ====
+
+async function invite() {
+  const url = `${location.origin}/?room=${ROOM}`;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: 'Bumper Brawl', text: `Join my Bumper Brawl room ${ROOM}`, url });
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    flashInvite('Link copied!');
+  } catch (err) {
+    // a dismissed share sheet is not an error worth showing
+    if (err?.name !== 'AbortError') flashInvite(url);
+  }
+}
+
+function flashInvite(text) {
+  if (joined) banner(`<small>${esc(text)}</small>`, 1400);
+  else setStatus(text);
+}
+
+if (ROOM) {
+  $('friendsBtn').hidden = true;
+  $('roomInfo').hidden = false;
+  $('roomCode').textContent = ROOM;
+}
+$('inviteBtn').addEventListener('click', invite);
+$('board').addEventListener('click', (e) => {
+  if (e.target.closest('[data-invite]')) invite();
+});
+$('friendsBtn').addEventListener('click', async () => {
+  try {
+    const res = await fetch('/api/rooms', { method: 'POST' });
+    const { code } = await res.json();
+    location.href = `/?room=${code}`;
+  } catch {
+    setStatus('Could not create a room, try again.');
+  }
+});
 
 $('play').disabled = true;
 $('joinForm').addEventListener('submit', (e) => {

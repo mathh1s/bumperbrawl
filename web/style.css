@@ -142,6 +142,35 @@ h1 {
 #play:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); }
 #play:disabled { filter: grayscale(0.7); cursor: default; }
 
+.rooms { margin-top: 12px; }
+.ghost {
+  font: 600 16px var(--font);
+  color: var(--ink);
+  background: #fff;
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  padding: 6px 14px;
+  cursor: pointer;
+  box-shadow: 0 3px 0 var(--ink);
+  width: 100%;
+}
+.ghost:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+.ghost.small { width: auto; padding: 3px 12px; font-size: 14px; }
+#roomInfo { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 15px; }
+#roomInfo b { letter-spacing: 0.12em; color: var(--accent); }
+#roomInfo a { color: var(--ink); opacity: 0.6; font-size: 13px; }
+#board .room {
+  pointer-events: auto;
+  cursor: pointer;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  border-bottom: 2px dashed rgba(45, 36, 64, 0.25);
+  margin-bottom: 4px;
+  padding-bottom: 4px;
+}
+#board .room b { letter-spacing: 0.1em; color: var(--accent); }
+
 .keys { font-size: 13px; margin: 14px 0 4px; opacity: 0.7; }
 kbd {
   font: 600 12px var(--font);

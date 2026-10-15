@@ -110,10 +110,12 @@ type Game struct {
 	nextCrate  int
 	crownID    int
 	roundTime  float64
+	code       string
 }
 
-func NewGame(minPlayers int, roundTime float64) *Game {
+func NewGame(code string, minPlayers int, roundTime float64) *Game {
 	g := &Game{
+		code:       code,
 		players:    map[int]*Player{},
 		clients:    map[*Client]struct{}{},
 		minPlayers: minPlayers,
@@ -506,6 +508,12 @@ func (g *Game) humanCount() int {
 	return n
 }
 
+func (g *Game) clientCount() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return len(g.clients)
+}
+
 func (g *Game) addClient(c *Client) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
@@ -558,7 +566,7 @@ func (g *Game) handle(c *Client, m inMsg) {
 		c.player = g.newPlayer(cleanName(m.N), color, hat, false)
 		g.syncBots()
 		g.queue(c, mustJSON(map[string]any{
-			"t": "welcome", "id": c.player.ID,
+			"t": "welcome", "id": c.player.ID, "room": g.code,
 			"cfg": map[string]any{"pr": playerRadius, "max": arenaMax, "min": arenaMin, "cd": dashCooldown},
 		}))
 		g.broadcast(g.rosterMsg())

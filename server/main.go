@@ -32,13 +32,16 @@ func main() {
 		origins = strings.Split(o, ",")
 	}
 
-	g := NewGame(minPlayers, roundSeconds)
-	go g.run()
+	lobby := NewLobby(minPlayers, roundSeconds)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir(webDir)))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("ok")) })
-	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) { g.serveWS(w, r, origins) })
+	mux.HandleFunc("POST /api/rooms", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"code": lobby.newCode()})
+	})
+	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) { lobby.serveWS(w, r, origins) })
 
 	log.Printf("bumper brawl listening on %s (web: %s)", addr, webDir)
 	log.Fatal(http.ListenAndServe(addr, mux))
@@ -51,10 +54,15 @@ func env(key, def string) string {
 	return def
 }
 
-func (g *Game) run() {
+func (g *Game) run(stop <-chan struct{}) {
 	t := time.NewTicker(time.Second / tickRate)
 	defer t.Stop()
-	for range t.C {
+	for {
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+		}
 		g.mu.Lock()
 		g.step(1.0 / tickRate)
 		if g.tick%sendEvery == 0 && len(g.clients) > 0 {
@@ -64,7 +72,7 @@ func (g *Game) run() {
 	}
 }
 
-func (g *Game) serveWS(w http.ResponseWriter, r *http.Request, origins []string) {
+func (l *Lobby) serveWS(w http.ResponseWriter, r *http.Request, origins []string) {
 	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{OriginPatterns: origins})
 	if err != nil {
 		return
@@ -76,7 +84,14 @@ func (g *Game) serveWS(w http.ResponseWriter, r *http.Request, origins []string)
 	defer cancel()
 
 	c := &Client{send: make(chan []byte, 64)}
-	g.addClient(c)
+	g, err := l.join(normalizeCode(r.URL.Query().Get("room")), c)
+	if err != nil {
+		wctx, wcancel := context.WithTimeout(ctx, 5*time.Second)
+		defer wcancel()
+		conn.Write(wctx, websocket.MessageText, mustJSON(map[string]any{"t": "full", "why": "rooms"}))
+		conn.Close(websocket.StatusTryAgainLater, "too many rooms")
+		return
+	}
 	defer g.removeClient(c)
 
 	go func() {
