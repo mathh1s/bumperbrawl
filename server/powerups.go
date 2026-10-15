@@ -57,7 +57,8 @@ func (g *Game) clearCrates() {
 }
 
 func (g *Game) updateCrates(dt float64) {
-	if g.phase == phasePlay && len(g.players) > 0 {
+	// crates are for the island; the pitch keeps to the ball
+	if g.phase == phasePlay && len(g.players) > 0 && g.mode != modeBall {
 		g.crateT -= dt
 		if g.crateT <= 0 && len(g.crates) < crateMax {
 			g.crateT = crateEvery * (0.75 + rand.Float64()*0.5)

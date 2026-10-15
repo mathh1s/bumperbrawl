@@ -362,7 +362,8 @@ func (g *Game) step(dt float64) {
 
 	for _, p := range g.players {
 		// jumps and ground pounds are airborne, so leaving the island only counts once they land
-		if !p.Falling && p.PoundT == 0 && !p.Airborne && math.Hypot(p.X, p.Z) > g.radius {
+		// the pitch has walls, so nobody leaves it
+		if g.mode != modeBall && !p.Falling && p.PoundT == 0 && !p.Airborne && math.Hypot(p.X, p.Z) > g.radius {
 			g.knockOut(p)
 		}
 	}
@@ -605,7 +606,7 @@ func (g *Game) thinkBots(dt float64) {
 func (g *Game) botSteer(b *Player, dx, dz float64) float64 {
 	fromCenter := math.Hypot(b.X, b.Z)
 	edgeDanger := fromCenter - (g.radius - 2.5)
-	if edgeDanger > 0 {
+	if edgeDanger > 0 && g.mode != modeBall {
 		w := edgeDanger * 3
 		dx -= b.X / fromCenter * w
 		dz -= b.Z / fromCenter * w
@@ -857,6 +858,9 @@ func (g *Game) snapshot() []byte {
 	}
 	if g.mode == modeCoins && g.phase == phasePlay {
 		msg["co"] = g.coinList()
+	}
+	if g.mode == modeBall && g.phase != phaseLobby {
+		msg["pt"] = 1 // the pitch stays up through the break after a ball round
 	}
 	if g.mode == modeBall && g.phase == phasePlay {
 		msg["bl"] = g.ballState()

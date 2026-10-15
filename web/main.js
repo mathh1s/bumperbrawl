@@ -172,7 +172,7 @@ function onSnapshot(m) {
     players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0, wins: a[10] ?? 0, team: a[11] ?? 0 });
   }
   const t = m.now * 1000 + clockOffset;
-  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, fm: m.fm ?? 0, kq: m.kq ?? 0, fin: !!m.fin, hl: m.hl, co: m.co, bl: m.bl };
+  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, fm: m.fm ?? 0, kq: m.kq ?? 0, fin: !!m.fin, hl: m.hl, co: m.co, bl: m.bl, pt: !!m.pt };
   snaps.push(snap);
   if (snaps.length > 60) snaps.shift();
   const phaseChanged = latest?.ph !== snap.ph;
@@ -223,7 +223,7 @@ function sample(rt) {
   if (a.bl && b.bl && !a.bl[3] && !b.bl[3] && Math.hypot(b.bl[0] - a.bl[0], b.bl[1] - a.bl[1]) < 4) {
     bl = [a.bl[0] + (b.bl[0] - a.bl[0]) * k, a.bl[1] + (b.bl[1] - a.bl[1]) * k, a.bl[2] + (b.bl[2] - a.bl[2]) * k, 0, b.bl[4], b.bl[5]];
   }
-  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw, sw, hl: b.hl, co: b.co, bl };
+  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw, sw, hl: b.hl, co: b.co, bl, pt: b.pt };
 }
 
 // ==== events ====
@@ -342,10 +342,6 @@ function fireEvents(rt, view) {
       case 'bw':
         fx.dust(e.x, 0.6, e.z);
         if (joined && me && Math.hypot(me.x - e.x, me.z - e.z) < 6) sfx.bump(e.p * 2, false);
-        break;
-      case 'bsp':
-        fx.splash(e.x, e.z, 1.6);
-        if (joined) sfx.splash(false);
         break;
       case 'hm':
         fx.ring(e.x, e.z, '#ffffff', 3.5);
@@ -865,7 +861,9 @@ function updateCamera(dt, view) {
   let me = joined && view ? view.players.get(myId) : null;
   if (me && me.flags & OUT) me = spectateTarget(view) ?? me;
   if (me) {
-    if (!(me.flags & 4)) camTarget.set(me.x * 0.6, 0, me.z * 0.6);
+    // the pitch is wider than the island, so follow further out to keep the goals in view
+    const follow = view.pt ? 0.8 : 0.6;
+    if (!(me.flags & 4)) camTarget.set(me.x * follow, 0, me.z * follow);
     const k = 1 - Math.exp(-dt * 4);
     camera.position.lerp(new THREE.Vector3(camTarget.x, 12 * dist, camTarget.z + 17 * dist), k);
     lookAt.lerp(new THREE.Vector3(camTarget.x, 0, camTarget.z - 2), k);
@@ -946,7 +944,8 @@ function frame(now) {
   sweeper.update(view?.sw, dt);
   hillRing.update(view?.hl, dt, t, (id) => roster.get(id)?.c ?? 0);
   coins.sync(view?.co, dt, t);
-  pitch.update(view?.bl, dt);
+  pitch.update(view?.pt, view?.bl, dt);
+  world.setIslandVisible(!view?.pt);
   if (view?.hl) popHillPoints(view);
   // the same edge arrow points at the ball when it is off screen
   pointToHill(view?.hl ?? (view?.bl && !view.bl[3] ? [view.bl[0], view.bl[1]] : null));

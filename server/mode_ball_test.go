@@ -61,9 +61,9 @@ func TestBallGoalScoresForTheTeam(t *testing.T) {
 
 func TestBallPastTheGoalComesBack(t *testing.T) {
 	g := ballGame(0)
-	g.ball = Ball{X: g.radius + 0.5}
+	g.ball = Ball{X: goalLine + 0.1}
 	runFor(g, 3)
-	if g.ball.Hidden || g.ball.Falling || g.ball.X != 0 {
+	if g.ball.Hidden || g.ball.X != 0 {
 		t.Fatalf("a ball in the sea is put back in the middle, %+v", g.ball)
 	}
 	if g.teamGoals[teamRed] != 1 {
@@ -97,9 +97,32 @@ func TestBotsPlayBlobBall(t *testing.T) {
 
 func TestFenceKeepsTheBallIn(t *testing.T) {
 	g := ballGame(0)
-	g.ball = Ball{Z: 12, VZ: 20}
+	g.ball = Ball{Z: 8, VZ: 20}
 	runFor(g, 0.5)
-	if g.ball.Falling || g.ball.Hidden || g.ball.VZ >= 0 {
+	if g.ball.Hidden || g.ball.VZ >= 0 {
 		t.Fatalf("the fence should bounce the ball back, %+v", g.ball)
+	}
+}
+
+func TestEndWallsStopTheBallOutsideTheMouth(t *testing.T) {
+	g := ballGame(0)
+	g.ball = Ball{X: 14, Z: 6, VX: 25}
+	runFor(g, 0.4)
+	if g.teamGoals != [3]int{} || g.ball.VX >= 0 {
+		t.Fatalf("a ball beside the goal should bounce off the end wall, %+v goals %v", g.ball, g.teamGoals)
+	}
+}
+
+func TestNobodyLeavesThePitch(t *testing.T) {
+	g := ballGame(0)
+	p := g.newPlayer("p", 0, 0, false)
+	p.Ghost = 0
+	p.X, p.Z, p.VX, p.VZ = 15, 9, 40, 40
+	runFor(g, 1)
+	if p.Falling || math.Abs(p.X) > pitchHalfX || math.Abs(p.Z) > pitchHalfZ {
+		t.Fatalf("blobs stay inside the walls, got %.2f %.2f falling %v", p.X, p.Z, p.Falling)
+	}
+	if len(g.crates) != 0 {
+		t.Fatal("no crates on the pitch")
 	}
 }

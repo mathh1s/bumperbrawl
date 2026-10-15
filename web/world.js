@@ -291,6 +291,8 @@ export class World {
     const crackGeo = new THREE.CircleGeometry(HEX * 0.92, 6).rotateX(-Math.PI / 2);
 
     this.tiles = [];
+    this.island = new THREE.Group();
+    this.scene.add(this.island);
     const n = Math.ceil((this.max + 2) / (HEX * SQ3)) + 1;
     for (let q = -n; q <= n; q++) {
       for (let r = -n; r <= n; r++) {
@@ -308,7 +310,7 @@ export class World {
         crack.rotation.y = Math.random() * Math.PI * 2;
         crack.visible = false;
         mesh.add(crack);
-        this.scene.add(mesh);
+        this.island.add(mesh);
         this.tiles.push({
           mesh, crack, x, z, d,
           state: 'ok',
@@ -480,12 +482,17 @@ export class World {
     this.scene.add(this.clouds);
   }
 
+  // Blob Ball plays in its own stadium, so the island steps aside for it
+  setIslandVisible(on) {
+    this.island.visible = on;
+  }
+
   update(dt, radius, camera) {
     this.t += dt;
     this.sky.position.copy(camera.position);
     this.clouds.rotation.y += dt * 0.01;
     this.waterUniforms.uTime.value = this.t;
-    if (radius !== null) this.updateIsland(radius, dt);
+    if (radius !== null && this.island.visible) this.updateIsland(radius, dt);
     this.waterUniforms.uShore.value = this.shore;
   }
 }

@@ -11,7 +11,7 @@ A small online 3D party brawler. Everyone is a squishy blob on a floating hex is
   - Last Blob Standing: three lives each, last one on the island wins
   - King of the Hill: hold the moving ring, closest to its centre scores
   - Coin Rush: grab coins, getting knocked off spills half of yours
-  - Blob Ball: two teams and a big ball, bonk it into the other team's goal (the island doesn't crumble and a fence keeps the ball in)
+  - Blob Ball: two teams and a big ball, bonk it into the other team's goal. It's played in a walled stadium instead of on the island, so nobody can fall off
 - Hold dash to charge a stronger launch; tap for a quick one
 - Power-up crates: heavy, bouncy and ground pound
 - Rated public matches: each browser gets a random key (no account, no password), and finishing a public match moves your rating like chess Elo against everyone you finished above or below, bots counting as 1000. Tiers show next to names and the menu has a leaderboard. Private rooms are never rated
@@ -93,7 +93,7 @@ web/     main.js   netcode, interpolation, camera, HUD
          predict.js  client-side prediction of your own blob
          lobby.js    private room lobby panel
          rank.js     rating tiers and the per-browser player key
-         ball.js     Blob Ball ball, goals and fence
+         ball.js     Blob Ball stadium, goals and ball
          world.js  sky, water, crumbling island, scenery
          blobs.js    player characters and hats
          preview.js  blob preview in the menu

@@ -6,7 +6,8 @@ import (
 	"sort"
 )
 
-// Blob Ball: two teams, one big ball, a goal at each end of the island.
+// Blob Ball: two teams, one big ball, a goal at each end of a walled pitch.
+// The pitch replaces the island for the round, so nobody can fall off.
 // Red attacks the goal at +x, blue the one at -x. Every player's round score
 // is their team's goal count, so the whole winning team takes the round.
 
@@ -18,24 +19,24 @@ const (
 
 	ballRadius     = 1.05
 	ballMass       = 0.55
-	ballDrag       = 0.75
+	ballDrag       = 0.55
 	ballBounce     = 0.85 // restitution against blobs
 	ballKick       = 1.5  // flat extra push so even a slow touch moves it
 	ballMaxReach   = 1.6  // blobs higher than this jump over the ball
-	goalLine       = 13.0 // the ball scores once its centre crosses this x inside the mouth
-	goalHalfWidth  = 3.0
+	pitchHalfX     = 17.0 // the walls run along x = ±pitchHalfX and z = ±pitchHalfZ
+	pitchHalfZ     = 10.5
+	goalHalfWidth  = 3.2
+	goalLine       = pitchHalfX + 0.3 // the ball scores once its centre is this far into the goal
 	ballResetDelay = 1.6
-	ballFallGrav   = 30.0
 	ballBotBehind  = 1.7
-	ballWall       = 13.9 // a low fence keeps the ball on the island everywhere but the goal mouths
 	ballWallBounce = 0.75
+	blobWallBounce = 0.3
 )
 
 type Ball struct {
 	X, Z, Y    float64
 	VX, VZ, VY float64
-	Falling    bool
-	Hidden     bool // between a goal or splash and the next kickoff
+	Hidden     bool // between a goal and the next kickoff
 	ResetT     float64
 	LastTouch  int
 }
@@ -97,7 +98,12 @@ func (g *Game) kickoff() {
 }
 
 func (g *Game) updateBall(dt float64) {
-	if g.mode != modeBall || g.phase != phasePlay {
+	if g.mode != modeBall {
+		return
+	}
+	// the walls hold through the break after the round too
+	g.containPlayers()
+	if g.phase != phasePlay {
 		return
 	}
 	b := &g.ball
@@ -109,17 +115,6 @@ func (g *Game) updateBall(dt float64) {
 		}
 		return
 	}
-	if b.Falling {
-		b.VY -= ballFallGrav * dt
-		b.Y += b.VY * dt
-		b.X += b.VX * dt
-		b.Z += b.VZ * dt
-		if b.Y < -4 {
-			b.Hidden, b.ResetT = true, ballResetDelay*0.6
-		}
-		return
-	}
-
 	g.ballHits()
 	damp := 1 - ballDrag*dt
 	b.VX *= damp
@@ -135,18 +130,51 @@ func (g *Game) updateBall(dt float64) {
 		g.goal(team)
 		return
 	}
-	if d := math.Hypot(b.X, b.Z); d > ballWall && math.Abs(b.Z) >= goalHalfWidth {
-		nx, nz := b.X/d, b.Z/d
-		b.X, b.Z = nx*ballWall, nz*ballWall
-		if vn := b.VX*nx + b.VZ*nz; vn > 0 {
-			b.VX -= (1 + ballWallBounce) * vn * nx
-			b.VZ -= (1 + ballWallBounce) * vn * nz
-			g.events = append(g.events, map[string]any{"k": "bw", "x": r2(b.X), "z": r2(b.Z), "p": r2(vn)})
+	g.ballWalls()
+}
+
+// ballWalls bounces the ball off the side walls, and off the end walls outside the goal mouths
+func (g *Game) ballWalls() {
+	b := &g.ball
+	hit := func(vn float64) {
+		g.events = append(g.events, map[string]any{"k": "bw", "x": r2(b.X), "z": r2(b.Z), "p": r2(math.Abs(vn))})
+	}
+	if lim := pitchHalfZ - ballRadius; math.Abs(b.Z) > lim {
+		b.Z = math.Copysign(lim, b.Z)
+		if b.VZ*b.Z > 0 {
+			hit(b.VZ)
+			b.VZ *= -ballWallBounce
 		}
 	}
-	if math.Hypot(b.X, b.Z) > g.radius+0.2 {
-		b.Falling, b.VY = true, 2
-		g.events = append(g.events, map[string]any{"k": "bsp", "x": r2(b.X), "z": r2(b.Z)})
+	inMouth := math.Abs(b.Z) < goalHalfWidth-ballRadius*0.5
+	if lim := pitchHalfX - ballRadius; !inMouth && math.Abs(b.X) > lim {
+		b.X = math.Copysign(lim, b.X)
+		if b.VX*b.X > 0 {
+			hit(b.VX)
+			b.VX *= -ballWallBounce
+		}
+	}
+}
+
+// containPlayers keeps every blob inside the walls, goals included
+func (g *Game) containPlayers() {
+	for _, p := range g.players {
+		if p.Falling {
+			continue
+		}
+		lx, lz := pitchHalfX-p.radius(), pitchHalfZ-p.radius()
+		if math.Abs(p.X) > lx {
+			p.X = math.Copysign(lx, p.X)
+			if p.VX*p.X > 0 {
+				p.VX *= -blobWallBounce
+			}
+		}
+		if math.Abs(p.Z) > lz {
+			p.Z = math.Copysign(lz, p.Z)
+			if p.VZ*p.Z > 0 {
+				p.VZ *= -blobWallBounce
+			}
+		}
 	}
 }
 
@@ -214,7 +242,7 @@ func (g *Game) ballState() []float64 {
 // through it and sometimes dashes
 func (g *Game) botBallInput(p *Player) (dx, dz float64, dash bool) {
 	b := g.ball
-	if b.Hidden || b.Falling {
+	if b.Hidden {
 		// wait on your own half for the kickoff
 		side := -4.0
 		if p.Team == teamBlue {
@@ -222,7 +250,7 @@ func (g *Game) botBallInput(p *Player) (dx, dz float64, dash bool) {
 		}
 		return side - p.X, -p.Z * 0.5, false
 	}
-	gx := goalLine + 1
+	gx := pitchHalfX + 1
 	if p.Team == teamBlue {
 		gx = -gx
 	}
