@@ -31,6 +31,7 @@ Then open http://localhost:8080. `PORT` changes the listen port.
 |-------------------|---------|----------------------------------------------------------------|
 | `PORT`            | 8080    | Listen port inside the container / process                     |
 | `MIN_PLAYERS`     | 4       | Bots fill up to this many players (0 = no bots)                |
+| `ROUND_SECONDS`   | 120     | Round length, at least 30                                      |
 | `ALLOWED_ORIGINS` | empty   | Extra allowed WebSocket origins; same-origin always works      |
 | `WEB_DIR`         | auto    | Static files directory                                         |
 

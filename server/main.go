@@ -16,6 +16,10 @@ import (
 func main() {
 	addr := ":" + env("PORT", "8080")
 	minPlayers, _ := strconv.Atoi(env("MIN_PLAYERS", "4"))
+	roundSeconds, err := strconv.ParseFloat(env("ROUND_SECONDS", "120"), 64)
+	if err != nil {
+		roundSeconds = 120
+	}
 	webDir := env("WEB_DIR", "")
 	if webDir == "" {
 		webDir = "../web"
@@ -28,7 +32,7 @@ func main() {
 		origins = strings.Split(o, ",")
 	}
 
-	g := NewGame(minPlayers)
+	g := NewGame(minPlayers, roundSeconds)
 	go g.run()
 
 	mux := http.NewServeMux()

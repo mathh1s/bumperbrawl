@@ -322,6 +322,14 @@ export class World {
     }
   }
 
+  // a whole ring of tiles can drop in one frame; a few effects read better than a wall of them
+  fxReady(kind) {
+    this.fxLast ??= {};
+    if (this.t - (this.fxLast[kind] ?? -1) < 0.12) return false;
+    this.fxLast[kind] = this.t;
+    return true;
+  }
+
   setTileLook(tl, cracked) {
     tl.mesh.material = cracked ? this.dryMat : this.tileMat;
     tl.crack.visible = cracked;
@@ -342,7 +350,7 @@ export class World {
         tl.vy = 1.5;
         tl.splashed = false;
         this.setTileLook(tl, true);
-        if (this.primed) this.fx?.dust(tl.x, 0.2, tl.z);
+        if (this.primed && this.fxReady('dust')) this.fx?.dust(tl.x, 0.2, tl.z);
       } else if (want === 'warn' && tl.state === 'ok') {
         tl.state = 'warn';
         this.setTileLook(tl, true);
@@ -375,7 +383,7 @@ export class World {
           m.rotation.z += tl.spinZ * dt;
           if (!tl.splashed && m.position.y < WATER_Y - 0.3 && this.primed) {
             tl.splashed = true;
-            this.fx?.splash(tl.x, tl.z, 0.6);
+            if (this.fxReady('splash')) this.fx?.splash(tl.x, tl.z, 0.6, false);
           }
           // joining mid-round should show the island as it is, not replay every collapse at once
           if (m.position.y < -14 || !this.primed) {

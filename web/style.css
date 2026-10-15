@@ -191,6 +191,10 @@ kbd {
 #board .bot { font-size: 10px; opacity: 0.5; text-transform: uppercase; }
 #board .sc { font-weight: 700; font-variant-numeric: tabular-nums; }
 #board li.me .nm { font-weight: 700; color: var(--accent); }
+#board .crown { width: 16px; height: 12px; flex: none; fill: var(--gold); stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+#feed .bounty { color: #e8590c; font-weight: 700; }
+#banner.high { top: 9%; }
+body.podium #touch, body.podium #dash, body.podium #power, body.podium #feed { display: none; }
 
 #feed {
   position: absolute; top: 14px; left: 14px;

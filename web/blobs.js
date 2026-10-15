@@ -143,6 +143,27 @@ function hatBuilder(ramp) {
   ];
 }
 
+export function makeCrown(ramp) {
+  const g = new THREE.Group();
+  const gold = new THREE.MeshToonMaterial({ color: '#ffc61a', gradientMap: ramp, emissive: '#5c3b00' });
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.34, 0.3, 0.22, 10, 1, true), gold);
+  band.material.side = THREE.DoubleSide;
+  g.add(band);
+  const gem = new THREE.MeshBasicMaterial({ color: '#ff4d6d' });
+  for (let i = 0; i < 5; i++) {
+    const a = (i / 5) * Math.PI * 2;
+    const spike = new THREE.Mesh(new THREE.ConeGeometry(0.08, 0.24, 6), gold);
+    spike.position.set(Math.sin(a) * 0.31, 0.22, Math.cos(a) * 0.31);
+    const ball = new THREE.Mesh(new THREE.SphereGeometry(0.045, 8, 6), gold);
+    ball.position.set(Math.sin(a) * 0.31, 0.36, Math.cos(a) * 0.31);
+    const stone = new THREE.Mesh(new THREE.SphereGeometry(0.05, 8, 6), gem);
+    stone.position.set(Math.sin(a + 0.63) * 0.33, 0, Math.cos(a + 0.63) * 0.33);
+    g.add(spike, ball, stone);
+  }
+  g.traverse((o) => { o.castShadow = o.isMesh; });
+  return g;
+}
+
 let hatFactories = null;
 export function makeHat(index, ramp) {
   hatFactories ??= hatBuilder(ramp);
@@ -248,6 +269,14 @@ export class Blob {
     this.jellyV = 0;
   }
 
+  setCrown(on, ramp) {
+    if (on && !this.crown) {
+      this.crown = makeCrown(ramp);
+      this.group.add(this.crown);
+    }
+    if (this.crown) this.crown.visible = on;
+  }
+
   bump(power) {
     this.jellyV += Math.min(power, 25) * 0.35;
     this.hitT = 0.45;
@@ -332,6 +361,11 @@ export class Blob {
     }
 
     if (this.hat.userData.spinner) this.hat.userData.spinner.rotation.y += dt * (8 + this.speed * 3);
+    if (this.crown?.visible) {
+      // the crown floats above the hat in group space so it stays level while the body wobbles
+      this.crown.position.y = 2.05 + this.pivot.position.y - 0.72 + Math.sin(t * 3) * 0.06;
+      this.crown.rotation.y += dt * 1.5;
+    }
     this.setExpression(t, dt, falling, dashing || charge > 0);
 
     if (ghost !== this.ghost) {
@@ -352,12 +386,14 @@ export class Blob {
     this.group.removeFromParent();
     this.mat.dispose();
     this.footMat.dispose();
-    this.hat.traverse((o) => {
-      if (o.isMesh && o.material !== INK) {
-        o.geometry.dispose();
-        o.material.dispose();
-      }
-    });
+    for (const part of [this.hat, this.crown]) {
+      part?.traverse((o) => {
+        if (o.isMesh && o.material !== INK) {
+          o.geometry.dispose();
+          o.material.dispose();
+        }
+      });
+    }
     if (this.label) {
       this.label.material.map.dispose();
       this.label.material.dispose();

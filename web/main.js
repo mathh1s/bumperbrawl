@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { World, makeRamp } from './world.js';
 import { Blob, PALETTE, HATS } from './blobs.js';
 import { Preview } from './preview.js';
+import { Podium } from './podium.js';
 import { FX } from './fx.js';
 import { Crates, POWERS } from './crates.js';
 import { Input } from './input.js';
@@ -28,6 +29,7 @@ const ramp = makeRamp();
 const fx = new FX(scene);
 const world = new World(scene, ramp, ARENA_MAX, fx);
 const crates = new Crates(scene, ramp);
+const podium = new Podium(ramp);
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -114,7 +116,7 @@ function onSnapshot(m) {
     players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0 });
   }
   const t = m.now * 1000 + clockOffset;
-  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [] };
+  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0 };
   snaps.push(snap);
   if (snaps.length > 60) snaps.shift();
   latest = snap;
@@ -156,7 +158,7 @@ function sample(rt) {
       pw: pb.pw,
     });
   }
-  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates };
+  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw };
 }
 
 // ==== events ====
@@ -185,17 +187,22 @@ function fireEvents(rt, view) {
         break;
       }
       case 'ko': {
-        addFeed(e.a, e.v);
-        if (!joined) break;
+        const a = `<b>${esc(nameOf(e.a))}</b>`, v = `<b>${esc(nameOf(e.v))}</b>`;
+        addFeed(!e.a ? `${v} fell off` : e.cr ? `${a} dethroned ${v} <span class="bounty">+2</span>` : `${a} bonked ${v}`);
+        if (!joined || podium.active) break;
         if (e.v === myId) {
           banner(e.a ? `Bonked!<small>by ${esc(nameOf(e.a))}</small>` : 'Splash!<small>you fell off</small>', 1600);
           sfx.fell();
         } else if (e.a === myId) {
-          banner(`+1<small>bonked ${esc(nameOf(e.v))}</small>`, 1100);
+          banner(e.cr ? `+2<small>you dethroned ${esc(nameOf(e.v))}</small>` : `+1<small>bonked ${esc(nameOf(e.v))}</small>`, 1100);
           sfx.ko();
         }
         break;
       }
+      case 'crown':
+        addFeed(`<b>${esc(nameOf(e.i))}</b> takes the crown`);
+        if (joined && e.i === myId) banner('Crowned!<small>everyone is after you now</small>', 1500);
+        break;
       case 'pk': {
         const p = playerPos(e.i, view);
         const info = POWERS[e.c];
@@ -222,11 +229,18 @@ function fireEvents(rt, view) {
         fx.dust(e.x, 0.4, e.z);
         break;
       case 'start':
+        podium.hide();
         if (joined) { banner('Brawl!', 1200); sfx.start(); }
         break;
       case 'end':
         if (joined) {
-          banner(e.w ? `${esc(e.w)} wins!<small>${e.s} bonk${e.s === 1 ? '' : 's'}</small>` : 'Round over!<small>nobody takes it</small>', 4000);
+          const text = e.w ? `${esc(e.w)} wins!<small>${e.s} bonk${e.s === 1 ? '' : 's'}</small>` : 'Round over!<small>nobody takes it</small>';
+          if (e.top?.length) {
+            podium.show(e.top);
+            banner(text, 6500, 'high');
+          } else {
+            banner(text, 4000);
+          }
           music.victory();
         }
         break;
@@ -248,26 +262,27 @@ function setStatus(s) {
 }
 
 let bannerTimer = 0;
-function banner(html, ms) {
+function banner(html, ms, cls = '') {
   const el = $('banner');
   el.innerHTML = html;
+  el.className = cls;
   el.classList.add('show');
   clearTimeout(bannerTimer);
   bannerTimer = setTimeout(() => el.classList.remove('show'), ms);
 }
 
-function addFeed(a, v) {
+function addFeed(html) {
   if (!joined) return;
   const li = document.createElement('li');
-  li.innerHTML = a
-    ? `<b>${esc(nameOf(a))}</b> bonked <b>${esc(nameOf(v))}</b>`
-    : `<b>${esc(nameOf(v))}</b> fell off`;
+  li.innerHTML = html;
   const feed = $('feed');
   feed.prepend(li);
   while (feed.children.length > 5) feed.lastChild.remove();
   setTimeout(() => li.classList.add('fade'), 4000);
   setTimeout(() => li.remove(), 4600);
 }
+
+const CROWN_SVG = '<svg class="crown" viewBox="0 0 24 18"><path d="M2 16h20l1-11-6 4-5-8-5 8-6-4z"/></svg>';
 
 let hudTimer = 0;
 function updateHud(dt, view) {
@@ -306,8 +321,9 @@ function updateHud(dt, view) {
     .slice(0, 8);
   $('board').innerHTML = rows.map(([id, p]) => {
     const r = roster.get(id);
+    const crown = id === latest.cw ? CROWN_SVG : '';
     return `<li class="${id === myId ? 'me' : ''}"><span class="dot" style="background:${PALETTE[r.c]}"></span>`
-      + `<span class="nm">${esc(r.n)}</span>${r.b ? '<span class="bot">bot</span>' : ''}<span class="sc">${p.score}</span></li>`;
+      + `<span class="nm">${esc(r.n)}</span>${crown}${r.b ? '<span class="bot">bot</span>' : ''}<span class="sc">${p.score}</span></li>`;
   }).join('');
 }
 
@@ -496,7 +512,11 @@ function frame(now) {
         }
       }
     }
-    for (const [id, b] of blobs) b.group.visible = view.players.has(id);
+    for (const [id, b] of blobs) {
+      b.group.visible = view.players.has(id);
+      b.setCrown(id === view.cw, ramp);
+    }
+    if (view.ph === 0 && podium.active) podium.hide();
   }
 
   world.update(dt, view?.r ?? null, camera);
@@ -506,7 +526,8 @@ function frame(now) {
   updateCamera(dt, view);
   updateHud(dt, view);
   music.play(pickTrack(view));
-  renderer.render(scene, camera);
+  if (podium.active && joined) podium.render(renderer, dt);
+  else renderer.render(scene, camera);
   if (!joined) preview.render(dt);
 }
 

@@ -29,7 +29,7 @@ const (
 	creditWindow = 3.5
 	arenaMax     = 15.0
 	arenaMin     = 6.0
-	roundTime    = 120.0
+	minRoundTime = 30.0
 	shrinkDelay  = 15.0
 	intermission = 8.0
 	maxHumans    = 16
@@ -108,13 +108,16 @@ type Game struct {
 	crates     []*Crate
 	crateT     float64
 	nextCrate  int
+	crownID    int
+	roundTime  float64
 }
 
-func NewGame(minPlayers int) *Game {
+func NewGame(minPlayers int, roundTime float64) *Game {
 	g := &Game{
 		players:    map[int]*Player{},
 		clients:    map[*Client]struct{}{},
 		minPlayers: minPlayers,
+		roundTime:  math.Max(minRoundTime, roundTime),
 	}
 	g.startRound()
 	return g
@@ -124,7 +127,7 @@ func NewGame(minPlayers int) *Game {
 
 func (g *Game) startRound() {
 	g.phase = phasePlay
-	g.phaseT = roundTime
+	g.phaseT = g.roundTime
 	g.radius = arenaMax
 	g.clearCrates()
 	for _, p := range g.players {
@@ -148,7 +151,7 @@ func (g *Game) endRound() {
 			tie = true
 		}
 	}
-	ev := map[string]any{"k": "end", "w": "", "s": 0}
+	ev := map[string]any{"k": "end", "w": "", "s": 0, "top": g.podium()}
 	if best != nil && best.Score > 0 && !tie {
 		ev["w"], ev["s"] = best.Name, best.Score
 	}
@@ -159,11 +162,11 @@ func (g *Game) arenaRadius() float64 {
 	if g.phase == phaseEnd {
 		return arenaMin
 	}
-	elapsed := roundTime - g.phaseT
+	elapsed := g.roundTime - g.phaseT
 	if elapsed < shrinkDelay {
 		return arenaMax
 	}
-	f := (elapsed - shrinkDelay) / (roundTime - shrinkDelay)
+	f := (elapsed - shrinkDelay) / (g.roundTime - shrinkDelay)
 	return arenaMax - (arenaMax-arenaMin)*math.Min(f, 1)
 }
 
@@ -282,6 +285,7 @@ func (g *Game) step(dt float64) {
 			g.knockOut(p)
 		}
 	}
+	g.updateCrown()
 }
 
 func (p *Player) mass() float64 {
@@ -358,15 +362,22 @@ func (g *Game) knockOut(p *Player) {
 	p.FallT = 0
 	p.VY = 3
 	killer := 0
+	ev := map[string]any{"k": "ko", "v": p.ID}
 	if p.LastHitBy != 0 && g.now-p.LastHitT < creditWindow {
 		if k, ok := g.players[p.LastHitBy]; ok && k != p {
 			killer = k.ID
 			if g.phase == phasePlay {
-				k.Score++
+				if p.ID == g.crownID {
+					k.Score += crownBounty
+					ev["cr"] = true
+				} else {
+					k.Score++
+				}
 			}
 		}
 	}
-	g.events = append(g.events, map[string]any{"k": "ko", "a": killer, "v": p.ID})
+	ev["a"] = killer
+	g.events = append(g.events, ev)
 }
 
 // ==== bots ====
@@ -425,13 +436,18 @@ func (g *Game) thinkBots(dt float64) {
 		b.think = 0.15 + rand.Float64()*0.2
 
 		var target *Player
-		best := math.Inf(1)
+		best, pick := math.Inf(1), math.Inf(1)
 		for _, o := range g.players {
 			if o == b || o.Falling || o.Ghost > 0 {
 				continue
 			}
-			if d := math.Hypot(o.X-b.X, o.Z-b.Z); d < best {
-				best, target = d, o
+			d := math.Hypot(o.X-b.X, o.Z-b.Z)
+			score := d
+			if o.ID == g.crownID {
+				score -= crownBotPull
+			}
+			if score < pick {
+				pick, best, target = score, d, o
 			}
 		}
 
@@ -646,7 +662,7 @@ func (g *Game) snapshot() []byte {
 	}
 	msg := map[string]any{
 		"t": "s", "now": r2(g.now), "r": r2(g.radius),
-		"ph": g.phase, "tl": r2(math.Max(0, g.phaseT)), "p": ps, "c": g.crateList(),
+		"ph": g.phase, "tl": r2(math.Max(0, g.phaseT)), "p": ps, "c": g.crateList(), "cw": g.crownID,
 	}
 	if len(g.events) > 0 {
 		msg["e"] = g.events

@@ -7,4 +7,5 @@ services:
       - "${HOST_PORT:?set HOST_PORT in .env}:8080"
     environment:
       MIN_PLAYERS: ${MIN_PLAYERS:-4}
+      ROUND_SECONDS: ${ROUND_SECONDS:-120}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}

@@ -115,9 +115,9 @@ export class FX {
     if (power > 12) this.ring(x, z, '#ffffff', 2 + k * 2);
   }
 
-  splash(x, z, scale = 1) {
+  splash(x, z, scale = 1, ring = true) {
     this.burst(x, -0.4, z, { colors: ['#ffffff', '#d9f6ff', '#7fe0f0'], n: Math.round(18 * scale), speed: 3.5 * scale, up: 9 * scale, life: 0.9, size: 0.18 * scale, gravity: 22, soft: true });
-    this.ring(x, z, '#ffffff', 3 * scale, -0.55);
+    if (ring) this.ring(x, z, '#ffffff', 3 * scale, -0.55);
   }
 
   dust(x, y, z) {
