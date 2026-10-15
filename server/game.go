@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"math/rand/v2"
+	"slices"
 	"strings"
 	"sync"
 	"unicode"
@@ -80,6 +81,7 @@ type Player struct {
 	PowT       float64
 	PoundT     float64
 	Ghost      float64
+	Ready      bool
 	Stun       float64
 	Falling    bool
 	FallT      float64
@@ -131,6 +133,12 @@ type Game struct {
 	sweepA    float64
 	sweepDir  float64
 	sweepOn   bool
+
+	private  bool
+	hostID   int
+	counting bool
+	forced   bool
+	modes    []int
 }
 
 func NewGame(code string, cfg Config) *Game {
@@ -141,6 +149,13 @@ func NewGame(code string, cfg Config) *Game {
 		players: map[int]*Player{},
 		clients: map[*Client]struct{}{},
 		cfg:     cfg,
+		modes:   slices.Clone(allModes),
+		private: code != "",
+	}
+	if g.private {
+		g.enterLobby()
+		g.events = nil
+		return g
 	}
 	g.newMatch()
 	g.startRound()
@@ -194,8 +209,11 @@ func (g *Game) endRound() {
 }
 
 func (g *Game) arenaRadius() float64 {
-	if g.phase == phaseEnd {
+	switch g.phase {
+	case phaseEnd:
 		return arenaMin
+	case phaseLobby:
+		return arenaMax
 	}
 	elapsed := g.cfg.RoundTime - g.phaseT
 	if elapsed < shrinkDelay {
@@ -241,11 +259,15 @@ func (g *Game) respawn(p *Player) {
 func (g *Game) step(dt float64) {
 	g.now += dt
 	g.tick++
-	g.phaseT -= dt
-	if g.phaseT <= 0 {
+	if g.phase == phaseLobby {
+		g.stepLobby(dt)
+	} else if g.phaseT -= dt; g.phaseT <= 0 {
 		switch {
 		case g.phase == phasePlay:
 			g.endRound()
+		case g.matchOver() && g.private:
+			g.enterLobby()
+			g.broadcast(g.roomMsg())
 		case g.matchOver():
 			g.newMatch()
 			g.startRound()
@@ -569,6 +591,9 @@ func (g *Game) addClient(c *Client) {
 	defer g.mu.Unlock()
 	g.clients[c] = struct{}{}
 	g.queue(c, g.rosterMsg())
+	if g.private {
+		g.queue(c, g.roomMsg())
+	}
 }
 
 func (g *Game) removeClient(c *Client) {
@@ -581,6 +606,7 @@ func (g *Game) removeClient(c *Client) {
 		delete(g.players, c.player.ID)
 		g.syncBots()
 		g.broadcast(g.rosterMsg())
+		g.roomChanged()
 	}
 }
 
@@ -592,6 +618,9 @@ type inMsg struct {
 	X float64 `json:"x"`
 	Z float64 `json:"z"`
 	S int64   `json:"s"`
+	V bool    `json:"v"`
+
+	Set *RoomSettings `json:"set"`
 }
 
 func (g *Game) handle(c *Client, m inMsg) {
@@ -620,10 +649,15 @@ func (g *Game) handle(c *Client, m inMsg) {
 		c.player = g.newPlayer(cleanName(m.N), color, hat, false)
 		g.syncBots()
 		g.queue(c, mustJSON(map[string]any{
-			"t": "welcome", "id": c.player.ID, "room": g.code,
+			"t": "welcome", "id": c.player.ID, "room": g.code, "private": g.private,
 			"cfg": map[string]any{"pr": playerRadius, "max": arenaMax, "min": arenaMin, "cd": dashCooldown, "mv": movementConfig()},
 		}))
 		g.broadcast(g.rosterMsg())
+		g.roomChanged()
+	case "ready", "settings", "start":
+		if c.player != nil {
+			g.handleRoom(c.player, m)
+		}
 	case "in":
 		if c.player == nil || math.IsNaN(m.X) || math.IsNaN(m.Z) {
 			return

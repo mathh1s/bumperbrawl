@@ -238,6 +238,79 @@ kbd {
 #board .out { font-size: 11px; opacity: 0.55; text-transform: uppercase; }
 #board .wins { font-size: 11px; font-weight: 700; color: #e8a400; -webkit-text-stroke: 0.4px var(--ink); }
 
+/* ==== private room lobby ==== */
+
+#lobby {
+  position: absolute; top: 14px; right: 14px;
+  width: min(300px, calc(100vw - 28px));
+  max-height: calc(100% - 140px);
+  display: flex; flex-direction: column;
+  pointer-events: auto;
+  touch-action: pan-y;
+  background: rgba(255, 250, 240, 0.95);
+  border: 3px solid var(--ink);
+  border-radius: 18px;
+  box-shadow: 0 5px 0 var(--ink);
+  padding: 10px 12px 12px;
+  font-size: 14px;
+}
+#lobby header { display: flex; align-items: center; gap: 8px; cursor: pointer; font-weight: 600; }
+#lobby header > span { flex: 1; }
+#lobby header b { letter-spacing: 0.12em; color: var(--accent); }
+#lobby .fold { border: 0; background: none; font: 700 16px var(--font); color: var(--ink); cursor: pointer; padding: 0 2px; }
+#lobby .body { overflow-y: auto; min-height: 0; margin-top: 8px; }
+#lobby.min .body { display: none; }
+#lobby .players { list-style: none; margin: 0; padding: 0 0 8px; border-bottom: 2px dashed rgba(45, 36, 64, 0.25); }
+#lobby .players li { display: flex; align-items: center; gap: 7px; padding: 2px 0; }
+#lobby .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--ink); flex: none; }
+#lobby .nm { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#lobby li.me .nm { font-weight: 700; color: var(--accent); }
+#lobby .host { width: 17px; height: 12px; flex: none; fill: var(--gold); stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
+#lobby .tag { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; border-radius: 8px; padding: 1px 6px; }
+#lobby .tag.ok { background: #69db7c; border: 2px solid var(--ink); }
+#lobby .tag.wait { opacity: 0.55; }
+#lobby .tag.bot { opacity: 0.45; }
+#lobby .settings { padding-top: 8px; }
+#lobby .row { display: flex; align-items: center; justify-content: space-between; padding: 2px 0; }
+#lobby .ctl { display: flex; align-items: center; gap: 6px; }
+#lobby .ctl b { min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
+#lobby .ctl button {
+  width: 26px; height: 26px; padding: 0;
+  font: 700 16px/1 var(--font); color: var(--ink);
+  background: #fff; border: 2px solid var(--ink); border-radius: 8px;
+  box-shadow: 0 2px 0 var(--ink); cursor: pointer;
+}
+#lobby .ctl button:disabled { opacity: 0.3; cursor: default; }
+#lobby .modes { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+#lobby .modes button {
+  font: 600 12px var(--font); color: var(--ink);
+  background: #fff; border: 2px solid var(--ink); border-radius: 10px;
+  padding: 3px 8px; cursor: pointer; opacity: 0.5;
+}
+#lobby .modes button[aria-pressed="true"] { background: var(--gold); opacity: 1; box-shadow: 0 2px 0 var(--ink); }
+#lobby .modes button:disabled { cursor: default; }
+#lobby .note { margin: 6px 0 0; font-size: 12px; opacity: 0.6; text-align: center; }
+#lobby .status { margin: 8px 0 6px; text-align: center; font-size: 13px; }
+#lobby .status b { color: var(--accent); font-size: 18px; }
+#lobby .actions { display: flex; gap: 8px; }
+#lobby .actions .ghost { width: auto; flex: none; font-size: 14px; }
+#lobby .readyBtn {
+  flex: 1;
+  font: 700 18px var(--font); color: #fff;
+  background: var(--accent);
+  border: 3px solid var(--ink); border-radius: 14px;
+  box-shadow: 0 4px 0 var(--ink);
+  padding: 6px 10px; cursor: pointer;
+  -webkit-text-stroke: 1px var(--ink);
+}
+#lobby .readyBtn.on { background: #69db7c; }
+#lobby button:active:not(:disabled) { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+
+@media (max-width: 640px) {
+  #lobby { width: min(250px, calc(100vw - 28px)); font-size: 13px; padding: 8px 10px 10px; }
+  #lobby .ctl b { min-width: 52px; }
+}
+
 #standings {
   position: absolute; left: 50%; bottom: 18px;
   transform: translateX(-50%);
@@ -349,6 +422,8 @@ body.touch #musicBtn { right: auto; bottom: auto; top: 14px; left: calc(50% + 74
 @media (max-width: 640px) {
   body.touch #musicBtn { left: 172px; }
 }
+/* the timer is hidden in the lobby, and the room panel takes the top right */
+body.touch.lobby #musicBtn { left: 14px; }
 
 /* ==== touch ==== */
 

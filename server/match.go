@@ -2,6 +2,7 @@ package main
 
 import (
 	"math/rand/v2"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -26,7 +27,7 @@ func (g *Game) newMatch() {
 	g.roundNo = 0
 	g.modeOrder = g.modeOrder[:0]
 	for len(g.modeOrder) < g.cfg.MatchRounds {
-		batch := append([]int(nil), allModes...)
+		batch := slices.Clone(g.modes)
 		rand.Shuffle(len(batch), func(i, j int) { batch[i], batch[j] = batch[j], batch[i] })
 		// never play the same mode twice in a row across a batch boundary
 		if n := len(g.modeOrder); n > 0 && len(batch) > 1 && batch[0] == g.modeOrder[n-1] {

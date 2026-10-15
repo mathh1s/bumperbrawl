@@ -13,6 +13,8 @@ import { Input } from './input.js';
 import { initAudio, sfx } from './audio.js';
 import { Predictor } from './predict.js';
 import { Music } from './music.js';
+import { LobbyPanel } from './lobby.js';
+import { esc } from './text.js';
 
 const INTERP_MS = 110;
 const ARENA_MAX = 15;
@@ -70,6 +72,7 @@ const pending = [];
 let clockOffset = null;
 let latest = null;
 let predictor = null;
+let roomState = null;
 
 // ==== network ====
 
@@ -87,6 +90,7 @@ function connect() {
     setStatus('Disconnected, retrying…');
     myId = null;
     predictor = null;
+    roomState = null;
     snaps.length = 0;
     clockOffset = null;
     setTimeout(connect, 1500);
@@ -99,12 +103,25 @@ function send(obj) {
 
 function onMessage(m) {
   switch (m.t) {
-    case 'roster':
+    case 'roster': {
+      const before = new Map(roster);
       roster.clear();
       for (const p of m.p) roster.set(p.i, p);
+      for (const [id, p] of roster) {
+        if (!before.has(id) && !p.b && id !== myId && before.size) addFeed(`<b>${esc(p.n)}</b> joined`);
+      }
+      for (const [id, p] of before) {
+        if (!roster.has(id) && !p.b) addFeed(`<b>${esc(p.n)}</b> left`);
+      }
       for (const [id, b] of blobs) {
         if (!roster.has(id)) { b.dispose(); blobs.delete(id); }
       }
+      renderLobby();
+      break;
+    }
+    case 'room':
+      roomState = m;
+      renderLobby();
       break;
     case 'welcome':
       myId = m.id;
@@ -294,6 +311,13 @@ function fireEvents(rt, view) {
       case 'cg':
         fx.dust(e.x, 0.4, e.z);
         break;
+      case 'lobby':
+        podium.hide();
+        lastEnd = null;
+        $('standings').hidden = true;
+        document.body.classList.remove('standings');
+        if (joined) banner('Back to the lobby<small>ready up for another match</small>', 2600);
+        break;
       case 'start': {
         podium.hide();
         lastEnd = null;
@@ -334,10 +358,6 @@ function fireEvents(rt, view) {
 
 const isTouch = matchMedia('(pointer: coarse)').matches;
 if (isTouch) document.body.classList.add('touch');
-
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
-}
 
 function setStatus(s) {
   $('status').textContent = s;
@@ -409,6 +429,11 @@ function updateHud(dt, view) {
 
   const tl = Math.ceil(latest.tl);
   countdownTick(tl);
+  const inLobby = latest.ph === 2;
+  $('timer').hidden = inLobby;
+  $('board').hidden = inLobby;
+  renderLobby();
+  if (inLobby) return;
   $('time').textContent = `${Math.floor(tl / 60)}:${String(tl % 60).padStart(2, '0')}`;
   const crumbling = latest.ph === 0 && view && view.r < ARENA_MAX - 0.01;
   $('phase').textContent = latest.ph === 1
@@ -516,6 +541,7 @@ function countdownTick(tl) {
   if (!joined || tl < 1 || tl > from || key === lastTick) return;
   lastTick = key;
   sfx.tick(tl === 1);
+  if (latest.ph === 2) banner(`<small>Match starts in</small>${tl}`, 900);
 }
 
 document.addEventListener('click', (e) => {
@@ -540,13 +566,24 @@ $('musicBtn').addEventListener('click', () => {
 renderMusicButton();
 
 function pickTrack(view) {
-  if (!joined || !view || view.ph === 1) return 'menu';
+  if (!joined || !view || view.ph !== 0) return 'menu';
   if (view.tl <= 30) return 'final';
   // the two round themes take turns so a match doesn't loop one song
   return (latest?.rn ?? 1) % 2 ? 'jam' : 'wobble';
 }
 
 // ==== rooms ====
+
+const lobbyPanel = new LobbyPanel($('lobby'), { send, onInvite: invite });
+
+function renderLobby() {
+  const show = joined && !!roomState && latest?.ph === 2;
+  $('lobby').hidden = !show;
+  document.body.classList.toggle('lobby', show);
+  if (!show) return;
+  const countdown = roomState.counting ? Math.max(1, Math.ceil(latest.tl)) : null;
+  lobbyPanel.render({ room: roomState, roster, myId, code: ROOM, countdown });
+}
 
 async function invite() {
   const url = `${location.origin}/?room=${ROOM}`;
@@ -728,7 +765,7 @@ function frame(now) {
       b.group.visible = !!s && !(s.flags & OUT && s.y < -2);
       b.setCrown(id === view.cw, ramp);
     }
-    if (view.ph === 0 && (podium.active || !$('standings').hidden)) {
+    if (view.ph !== 1 && (podium.active || !$('standings').hidden)) {
       podium.hide();
       $('standings').hidden = true;
       document.body.classList.remove('standings');

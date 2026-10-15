@@ -15,7 +15,7 @@ A small online 3D party brawler. Everyone is a squishy blob on a floating hex is
 - Power-up crates: heavy, bouncy and ground pound
 - In the last 30 seconds a giant log sweeps the island; jump it or get swept away
 - The leader wears a crown worth 2 points to whoever knocks them off; rounds end on a podium
-- Private rooms: "Play with friends" creates a room at `/?room=CODE` to share; empty rooms close after a minute
+- Private rooms: "Play with friends" creates a room at `/?room=CODE` to share. It opens in a lobby that lists who joined and who is ready; the host (first one in) picks rounds, round length, bots and modes, and the match starts when everyone is ready or the host starts it. After the match the room goes back to the lobby. Empty rooms close after a minute
 
 ## Run with Docker
 
@@ -81,9 +81,11 @@ This rewrites the mp3 files and `web/music/tracks.json` (loop points). The sound
 ```
 server/  game.go   simulation, rounds, bots, snapshots
          movement.go  steering, dashes, knockback control (mirrored in web/predict.js)
+         room.go      private room lobby: host, ready checks, settings
          main.go   http server, websocket handling, game loop
 web/     main.js   netcode, interpolation, camera, HUD
          predict.js  client-side prediction of your own blob
+         lobby.js    private room lobby panel
          world.js  sky, water, crumbling island, scenery
          blobs.js    player characters and hats
          preview.js  blob preview in the menu
