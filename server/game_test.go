@@ -9,6 +9,16 @@ var testCfg = Config{MinPlayers: 0, RoundTime: 120, MatchRounds: 3}
 
 func testGame() *Game { return NewGame("", testCfg) }
 
+// brawlGame pins every round to Bonk Brawl so scores mean bonks
+func brawlGame() *Game {
+	g := testGame()
+	for i := range g.modeOrder {
+		g.modeOrder[i] = modeBrawl
+	}
+	g.mode = modeBrawl
+	return g
+}
+
 func newTestLobby() *Lobby {
 	return &Lobby{rooms: map[string]*room{}, cfg: testCfg}
 }
@@ -59,7 +69,7 @@ func TestRoomsAreIsolatedAndReaped(t *testing.T) {
 func TestRoomLimit(t *testing.T) {
 	l := newTestLobby()
 	for i := 0; i < maxRooms; i++ {
-		l.rooms[string(rune('a'+i%26))+string(rune('a'+i/26))] = &room{game: testGame(), stop: make(chan struct{})}
+		l.rooms[string(rune('a'+i%26))+string(rune('a'+i/26))] = &room{game: brawlGame(), stop: make(chan struct{})}
 	}
 	if _, err := l.join("NEWONE", &Client{send: make(chan []byte, 64)}); err != errTooManyRooms {
 		t.Fatalf("expected room limit error, got %v", err)
@@ -67,7 +77,7 @@ func TestRoomLimit(t *testing.T) {
 }
 
 func TestCrownGoesToSoleLeaderAndStaysOnTie(t *testing.T) {
-	g := testGame()
+	g := brawlGame()
 	a := g.newPlayer("a", 0, 0, false)
 	b := g.newPlayer("b", 0, 0, false)
 
@@ -93,7 +103,7 @@ func TestCrownGoesToSoleLeaderAndStaysOnTie(t *testing.T) {
 }
 
 func TestCrownBounty(t *testing.T) {
-	g := testGame()
+	g := brawlGame()
 	king := g.newPlayer("king", 0, 0, false)
 	hunter := g.newPlayer("hunter", 0, 0, false)
 	king.Score = 3
@@ -107,7 +117,7 @@ func TestCrownBounty(t *testing.T) {
 }
 
 func TestPodiumOrder(t *testing.T) {
-	g := testGame()
+	g := brawlGame()
 	for i, s := range []int{1, 5, 0, 3, 5} {
 		g.newPlayer(string(rune('a'+i)), 0, 0, false).Score = s
 	}
@@ -125,7 +135,7 @@ func TestPodiumOrder(t *testing.T) {
 
 func TestChargedDashGoesFurther(t *testing.T) {
 	travel := func(charge float64) float64 {
-		g := testGame()
+		g := brawlGame()
 		p := g.newPlayer("p", 0, 0, false)
 		p.X, p.Z, p.Ghost, p.Angle = 0, 0, 0, 0
 		if charge > 0 {
@@ -145,7 +155,7 @@ func TestChargedDashGoesFurther(t *testing.T) {
 
 func sweepGame(t *testing.T) (*Game, *Player) {
 	t.Helper()
-	g := testGame()
+	g := brawlGame()
 	g.phaseT = 20
 	g.sweepDir = 1
 	g.sweepA = -0.05
@@ -214,7 +224,7 @@ func lastEvent(g *Game, kind string) map[string]any {
 }
 
 func TestRoundWinsAndMatchChampion(t *testing.T) {
-	g := testGame()
+	g := brawlGame()
 	a := g.newPlayer("a", 0, 0, false)
 	b := g.newPlayer("b", 0, 0, false)
 
@@ -256,7 +266,7 @@ func TestRoundWinsAndMatchChampion(t *testing.T) {
 }
 
 func TestScorelessRoundHasNoWinner(t *testing.T) {
-	g := testGame()
+	g := brawlGame()
 	a := g.newPlayer("a", 0, 0, false)
 	finishRound(g)
 	if a.Wins != 0 || lastEvent(g, "end")["w"] != "" {
@@ -275,5 +285,73 @@ func TestModeOrderCoversEveryMode(t *testing.T) {
 	}
 	if len(seen) != len(allModes) {
 		t.Fatalf("every mode should appear, order %v", g.modeOrder)
+	}
+}
+
+func lastGame(t *testing.T, n int) (*Game, []*Player) {
+	t.Helper()
+	g := brawlGame()
+	ps := make([]*Player, n)
+	for i := range ps {
+		ps[i] = g.newPlayer(string(rune('a'+i)), 0, 0, false)
+	}
+	g.mode = modeLast
+	g.startLast()
+	return g, ps
+}
+
+func TestLastBlobLivesAndElimination(t *testing.T) {
+	g, ps := lastGame(t, 3)
+	a := ps[0]
+	for i := 0; i < startLives; i++ {
+		if a.Out {
+			t.Fatalf("out after only %d knockouts", i)
+		}
+		g.knockOut(a)
+	}
+	if !a.Out || a.Score != 0 || countEvents(g, "out") != 1 {
+		t.Fatalf("three knockouts eliminate: out=%v score=%d", a.Out, a.Score)
+	}
+	for i := 0; i < 200; i++ {
+		g.step(1.0 / tickRate)
+	}
+	if a.Y != outParkedAt || !a.Falling {
+		t.Fatalf("an eliminated blob stays parked out of play, y=%.1f", a.Y)
+	}
+	if g.phase != phasePlay {
+		t.Fatal("two blobs are still in, the round goes on")
+	}
+}
+
+func TestLastBlobEndsWithOneLeft(t *testing.T) {
+	g, ps := lastGame(t, 2)
+	for i := 0; i < startLives; i++ {
+		g.knockOut(ps[1])
+	}
+	g.step(1.0 / tickRate)
+	if g.phase != phaseEnd {
+		t.Fatal("round ends once one blob is left")
+	}
+	if ps[0].Wins != 1 || ps[1].Wins != 0 {
+		t.Fatalf("the survivor wins the round, wins=%d/%d", ps[0].Wins, ps[1].Wins)
+	}
+}
+
+func TestLastBlobSoloKeepsPlaying(t *testing.T) {
+	g, ps := lastGame(t, 1)
+	for i := 0; i < startLives; i++ {
+		g.knockOut(ps[0])
+	}
+	g.step(1.0 / tickRate)
+	if g.phase != phasePlay {
+		t.Fatal("a lone player is not ended early")
+	}
+}
+
+func TestLateJoinerGetsOneLife(t *testing.T) {
+	g, _ := lastGame(t, 2)
+	late := g.newPlayer("late", 0, 0, false)
+	if late.Lives != lateLives || late.Out {
+		t.Fatalf("late joiner lives=%d out=%v", late.Lives, late.Out)
 	}
 }

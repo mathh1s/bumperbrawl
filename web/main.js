@@ -6,7 +6,7 @@ import { Podium } from './podium.js';
 import { Sweeper } from './sweeper.js';
 import { FX } from './fx.js';
 import { Crates, POWERS } from './crates.js';
-import { modeOf } from './modes.js';
+import { modeOf, OUT } from './modes.js';
 import { Input } from './input.js';
 import { initAudio, sfx } from './audio.js';
 import { Music } from './music.js';
@@ -205,11 +205,16 @@ function fireEvents(rt, view) {
           banner(e.a ? `Bonked!<small>by ${esc(nameOf(e.a))}</small>` : 'Splash!<small>you fell off</small>', 1600);
           sfx.fell();
         } else if (e.a === myId) {
-          banner(e.cr ? `+2<small>you dethroned ${esc(nameOf(e.v))}</small>` : `+1<small>bonked ${esc(nameOf(e.v))}</small>`, 1100);
+          if (latest?.md === 0) banner(e.cr ? `+2<small>you dethroned ${esc(nameOf(e.v))}</small>` : `+1<small>bonked ${esc(nameOf(e.v))}</small>`, 1100);
+          else banner(`Bonk!<small>you knocked off ${esc(nameOf(e.v))}</small>`, 1100);
           sfx.ko();
         }
         break;
       }
+      case 'out':
+        addFeed(`<b>${esc(nameOf(e.i))}</b> is out!`);
+        if (joined && e.i === myId) banner('You\'re out!<small>watch who survives</small>', 2200);
+        break;
       case 'crown':
         addFeed(`<b>${esc(nameOf(e.i))}</b> takes the crown`);
         if (joined && e.i === myId) banner('Crowned!<small>everyone is after you now</small>', 1500);
@@ -559,11 +564,23 @@ const lookAt = new THREE.Vector3();
 let menuAngle = 0;
 let shake = 0;
 
+// once out, follow the crowned blob, or anyone still standing
+function spectateTarget(view) {
+  let pick = null;
+  for (const [id, p] of view.players) {
+    if (p.flags & (OUT | 4)) continue;
+    if (id === view.cw) return p;
+    pick ??= p;
+  }
+  return pick;
+}
+
 // Low three-quarter view so the horizon stays on screen; portrait screens pull back to keep the island in frame
 function updateCamera(dt, view) {
   const portrait = camera.aspect < 1;
   const dist = portrait ? 1.6 : 1;
-  const me = joined && view ? view.players.get(myId) : null;
+  let me = joined && view ? view.players.get(myId) : null;
+  if (me && me.flags & OUT) me = spectateTarget(view) ?? me;
   if (me) {
     if (!(me.flags & 4)) camTarget.set(me.x * 0.6, 0, me.z * 0.6);
     const k = 1 - Math.exp(-dt * 4);
@@ -622,7 +639,9 @@ function frame(now) {
       }
     }
     for (const [id, b] of blobs) {
-      b.group.visible = view.players.has(id);
+      const s = view.players.get(id);
+      // eliminated blobs disappear once they have splashed down
+      b.group.visible = !!s && !(s.flags & OUT && s.y < -2);
       b.setCrown(id === view.cw, ramp);
     }
     if (view.ph === 0 && (podium.active || !$('standings').hidden)) {

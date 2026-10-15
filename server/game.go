@@ -86,6 +86,8 @@ type Player struct {
 	LastHitT  float64
 
 	Score    int
+	Lives    int
+	Out      bool
 	Wins     int
 	MatchPts int
 
@@ -149,8 +151,11 @@ func (g *Game) startRound() {
 	g.clearCrates()
 	g.resetSweeper()
 	for _, p := range g.players {
-		p.Score = 0
+		p.Score, p.Lives, p.Out = 0, 0, false
 		g.respawn(p)
+	}
+	if g.mode == modeLast {
+		g.startLast()
 	}
 	g.events = append(g.events, map[string]any{"k": "start", "m": g.mode, "r": g.roundNo, "of": g.cfg.MatchRounds})
 }
@@ -241,6 +246,10 @@ func (g *Game) step(dt float64) {
 	g.thinkBots(dt)
 
 	for _, p := range g.players {
+		// eliminated blobs finish their fall into the sea, then sit out the round
+		if p.Out && p.FallT > respawnDelay {
+			continue
+		}
 		if p.Falling {
 			p.FallT += dt
 			p.VY -= fallGravity * dt
@@ -250,7 +259,11 @@ func (g *Game) step(dt float64) {
 			p.VX *= 1 - 1.5*dt
 			p.VZ *= 1 - 1.5*dt
 			if p.FallT > respawnDelay {
-				g.respawn(p)
+				if p.Out {
+					p.Y = outParkedAt
+				} else {
+					g.respawn(p)
+				}
 			}
 			continue
 		}
@@ -311,6 +324,9 @@ func (g *Game) step(dt float64) {
 		}
 	}
 	g.updateCrown()
+	if g.phase == phasePlay && g.mode == modeLast && g.lastStandingDone() {
+		g.endRound()
+	}
 }
 
 func (p *Player) mass() float64 {
@@ -405,6 +421,10 @@ func (g *Game) knockOut(p *Player) {
 }
 
 func (g *Game) scoreKnockOut(victim, killer *Player, ev map[string]any) {
+	if g.mode == modeLast {
+		g.knockOutLast(victim)
+		return
+	}
 	if g.mode != modeBrawl || killer == nil {
 		return
 	}
@@ -530,6 +550,9 @@ func (g *Game) newPlayer(name string, color, hat int, bot bool) *Player {
 	p := &Player{ID: g.nextID, Name: name, Color: color, Hat: hat, Bot: bot}
 	g.players[p.ID] = p
 	g.respawn(p)
+	if g.phase == phasePlay && g.mode == modeLast {
+		g.joinLast(p)
+	}
 	return p
 }
 
@@ -697,6 +720,9 @@ func (g *Game) snapshot() []byte {
 		}
 		if p.PoundT > 0 {
 			flags |= flagPound
+		}
+		if p.Out {
+			flags |= flagOut
 		}
 		cd := 0.0
 		if p.DashCDMax > 0 {

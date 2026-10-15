@@ -223,6 +223,8 @@ kbd {
 #board .crown { width: 16px; height: 12px; flex: none; fill: var(--gold); stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
 #feed .bounty { color: #e8590c; font-weight: 700; }
 #banner.high { top: 9%; }
+#board .hearts { color: #ff4d6d; letter-spacing: -1px; }
+#board .out { font-size: 11px; opacity: 0.55; text-transform: uppercase; }
 #board .wins { font-size: 11px; font-weight: 700; color: #e8a400; -webkit-text-stroke: 0.4px var(--ink); }
 
 #standings {
@@ -242,6 +244,9 @@ kbd {
 #standings .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 #standings li.me .nm { font-weight: 700; color: var(--accent); }
 body.standings #touch, body.standings #dash, body.standings #power { display: none; }
+@media (min-width: 700px) {
+  body.podium #standings { left: 16px; bottom: 16px; transform: none; }
+}
 #standings .stars { color: #e8a400; font-weight: 700; letter-spacing: 1px; -webkit-text-stroke: 0.5px var(--ink); }
 body.podium #touch, body.podium #dash, body.podium #power, body.podium #feed { display: none; }
 
