@@ -60,7 +60,7 @@ location / {
 }
 ```
 
-## Soundtrack
+## Soundtrack and sound effects
 
 The music in `web/music/` is composed in `tools/music/compose.py` and rendered with the
 [GeneralUser GS](https://github.com/mrbumpy409/GeneralUser-GS) soundfont. To change or regenerate it:
@@ -71,7 +71,8 @@ git clone --depth 1 https://github.com/mrbumpy409/GeneralUser-GS /tmp/gugs
 python3 tools/music/compose.py /tmp/gugs/GeneralUser-GS.sf2
 ```
 
-This rewrites the mp3 files and `web/music/tracks.json` (loop points). ffmpeg with libmp3lame is required.
+This rewrites the mp3 files and `web/music/tracks.json` (loop points). The sound effects in `web/sfx/` come from
+`python3 tools/music/sfx.py /tmp/gugs/GeneralUser-GS.sf2` the same way. ffmpeg with libmp3lame is required.
 
 ## Layout
 
@@ -83,9 +84,11 @@ web/     main.js   netcode, interpolation, camera, HUD
          blobs.js    player characters and hats
          preview.js  blob preview in the menu
          fx.js       particles
-         audio.js    synthesized sound effects
+         audio.js    sound effect playback
          music.js    soundtrack playback and crossfades
          input.js    keyboard and touch controls
          music/      rendered soundtrack and loop points
+         sfx/        rendered sound effects
 tools/   music/compose.py  soundtrack composition and rendering
+         music/sfx.py      sound effect design and rendering
 ```

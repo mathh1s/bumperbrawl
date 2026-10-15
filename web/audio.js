@@ -1,6 +1,12 @@
+// Sound effects are rendered offline by tools/music/sfx.py and played as buffers.
+// Each play nudges the pitch a little so repeated bonks don't sound like a machine gun.
+
+const NAMES = ['bonk', 'bonk_big', 'dash', 'dash_big', 'charge', 'jump', 'land', 'splash', 'fell', 'ko', 'out',
+  'start', 'coin', 'pickup', 'pound', 'crown', 'log_land', 'tick', 'click'];
+
 let ctx = null;
 let master = null;
-let noise = null;
+const buffers = new Map();
 let charge = null;
 
 export function initAudio() {
@@ -9,107 +15,102 @@ export function initAudio() {
     if (!AC) return null;
     ctx = new AC();
     master = ctx.createGain();
-    master.gain.value = 0.35;
+    master.gain.value = 0.7;
     master.connect(ctx.destination);
-    noise = ctx.createBuffer(1, ctx.sampleRate * 0.5, ctx.sampleRate);
-    const d = noise.getChannelData(0);
-    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    for (const name of NAMES) load(name);
   }
   ctx.resume();
   return ctx;
 }
 
-function tone(f0, f1, dur, { type = 'sine', vol = 0.5, delay = 0 } = {}) {
-  if (!ctx) return;
-  const t = ctx.currentTime + delay;
-  const o = ctx.createOscillator();
-  const g = ctx.createGain();
-  o.type = type;
-  o.frequency.setValueAtTime(f0, t);
-  o.frequency.exponentialRampToValueAtTime(Math.max(1, f1), t + dur);
-  g.gain.setValueAtTime(vol, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  o.connect(g).connect(master);
-  o.start(t);
-  o.stop(t + dur + 0.02);
+async function load(name) {
+  try {
+    const res = await fetch(`sfx/${name}.mp3`);
+    const data = await res.arrayBuffer();
+    // the callback form also works on older Safari
+    buffers.set(name, await new Promise((ok, fail) => ctx.decodeAudioData(data, ok, fail)));
+  } catch {
+    // a missing effect just stays silent
+  }
 }
 
-function hiss(dur, freq, vol) {
-  if (!ctx) return;
-  const t = ctx.currentTime;
-  const s = ctx.createBufferSource();
-  s.buffer = noise;
-  const f = ctx.createBiquadFilter();
-  f.type = 'lowpass';
-  f.frequency.setValueAtTime(freq, t);
-  f.frequency.exponentialRampToValueAtTime(200, t + dur);
+function play(name, { vol = 1, rate = 1, spread = 0.06, delay = 0 } = {}) {
+  const buf = buffers.get(name);
+  if (!ctx || !buf || vol <= 0) return null;
+  const src = ctx.createBufferSource();
+  src.buffer = buf;
+  src.playbackRate.value = rate * (1 + (Math.random() * 2 - 1) * spread);
   const g = ctx.createGain();
-  g.gain.setValueAtTime(vol, t);
-  g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-  s.connect(f).connect(g).connect(master);
-  s.start(t);
-  s.stop(t + dur);
+  g.gain.value = vol;
+  src.connect(g).connect(master);
+  src.start(ctx.currentTime + delay);
+  return { src, g };
 }
 
 export const sfx = {
+  // power runs from about 4 for a nudge to 20+ for a charged hit
   bump(power, near) {
-    const v = Math.min(1, power / 20) * (near ? 0.9 : 0.35);
-    tone(240 + Math.random() * 60, 70, 0.18, { type: 'sine', vol: v });
-    tone(520, 180, 0.08, { type: 'triangle', vol: v * 0.4 });
+    const k = Math.min(1, power / 20);
+    const v = (0.35 + k * 0.65) * (near ? 0.9 : 0.3);
+    if (power > 12) play('bonk_big', { vol: v, rate: 1.15 - k * 0.2 });
+    else play('bonk', { vol: v, rate: 1.2 - k * 0.3, spread: 0.1 });
   },
   dash(power = 0) {
-    hiss(0.18 + power * 0.2, 2500 + power * 2000, 0.25 + power * 0.25);
-    tone(300, 600 + power * 500, 0.12 + power * 0.1, { type: 'triangle', vol: 0.15 + power * 0.1 });
+    if (power > 0.5) play('dash_big', { vol: 0.5 + power * 0.3, rate: 0.9 + power * 0.15, spread: 0.03 });
+    else play('dash', { vol: 0.55, spread: 0.1 });
   },
   chargeStart() {
-    if (!ctx) return;
     sfx.chargeStop();
-    const t = ctx.currentTime;
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = 'triangle';
-    o.frequency.setValueAtTime(180, t);
-    o.frequency.linearRampToValueAtTime(620, t + 0.9);
-    g.gain.setValueAtTime(0.0001, t);
-    g.gain.linearRampToValueAtTime(0.13, t + 0.12);
-    o.connect(g).connect(master);
-    o.start(t);
-    charge = { o, g };
+    charge = play('charge', { vol: 0.22, spread: 0 });
   },
   chargeStop() {
     if (!charge) return;
     const t = ctx.currentTime;
-    charge.g.gain.cancelScheduledValues(t);
     charge.g.gain.setValueAtTime(charge.g.gain.value, t);
     charge.g.gain.linearRampToValueAtTime(0.0001, t + 0.05);
-    charge.o.stop(t + 0.06);
+    charge.src.stop(t + 0.06);
     charge = null;
   },
   splash(near) {
-    hiss(0.45, near ? 3000 : 1400, near ? 0.6 : 0.2);
+    play('splash', { vol: near ? 0.6 : 0.2, spread: 0.1 });
   },
   ko() {
-    [523, 659, 784].forEach((f, i) => tone(f, f, 0.12, { type: 'square', vol: 0.12, delay: i * 0.07 }));
+    play('ko', { vol: 0.9, spread: 0 });
   },
   fell() {
-    tone(500, 120, 0.5, { type: 'triangle', vol: 0.3 });
+    play('fell', { vol: 0.28, spread: 0.04 });
+  },
+  out() {
+    play('out', { vol: 0.5, spread: 0 });
+  },
+  crown() {
+    play('crown', { vol: 0.6, spread: 0 });
   },
   jump() {
-    tone(240, 560, 0.16, { type: 'sine', vol: 0.3 });
-    tone(480, 1100, 0.1, { type: 'triangle', vol: 0.08 });
+    play('jump', { vol: 0.4, spread: 0.08 });
+  },
+  land() {
+    play('land', { vol: 0.35, spread: 0.12 });
   },
   coin() {
-    tone(988, 988, 0.07, { type: 'square', vol: 0.09 });
-    tone(1319, 1319, 0.16, { type: 'square', vol: 0.09, delay: 0.07 });
+    play('coin', { vol: 0.28, spread: 0.02 });
   },
   pickup() {
-    [659, 880, 1175].forEach((f, i) => tone(f, f, 0.14, { type: 'triangle', vol: 0.22, delay: i * 0.06 }));
+    play('pickup', { vol: 0.45, spread: 0 });
   },
   pound(near) {
-    tone(150, 38, 0.4, { type: 'sine', vol: near ? 0.9 : 0.35 });
-    hiss(0.45, 1100, near ? 0.5 : 0.18);
+    play('pound', { vol: near ? 0.75 : 0.3, spread: 0.05 });
+  },
+  logLand() {
+    play('log_land', { vol: 0.65, spread: 0.03 });
   },
   start() {
-    [392, 523, 659, 784].forEach((f, i) => tone(f, f * 1.01, 0.16, { type: 'square', vol: 0.1, delay: i * 0.09 }));
+    play('start', { vol: 0.5, spread: 0 });
+  },
+  tick(last) {
+    play('tick', { vol: last ? 0.6 : 0.4, rate: last ? 1.5 : 1, spread: 0 });
+  },
+  click() {
+    play('click', { vol: 0.3, spread: 0.05 });
   },
 };

@@ -44,7 +44,7 @@ const lastScores = new Map();
 const arrowPos = new THREE.Vector3();
 sweeper.onLand = () => {
   shake = 0.5;
-  if (joined) sfx.pound(true);
+  if (joined) sfx.logLand();
 };
 
 function resize() {
@@ -219,11 +219,17 @@ function fireEvents(rt, view) {
       }
       case 'out':
         addFeed(`<b>${esc(nameOf(e.i))}</b> is out!`);
-        if (joined && e.i === myId) banner('You\'re out!<small>watch who survives</small>', 2200);
+        if (joined && e.i === myId) {
+          banner('You\'re out!<small>watch who survives</small>', 2200);
+          sfx.out();
+        }
         break;
       case 'crown':
         addFeed(`<b>${esc(nameOf(e.i))}</b> takes the crown`);
-        if (joined && e.i === myId) banner('Crowned!<small>everyone is after you now</small>', 1500);
+        if (joined && e.i === myId) {
+          banner('Crowned!<small>everyone is after you now</small>', 1500);
+          sfx.crown();
+        }
         break;
       case 'pk': {
         const p = playerPos(e.i, view);
@@ -392,6 +398,7 @@ function updateHud(dt, view) {
   hudTimer = 0.2;
 
   const tl = Math.ceil(latest.tl);
+  countdownTick(tl);
   $('time').textContent = `${Math.floor(tl / 60)}:${String(tl % 60).padStart(2, '0')}`;
   const crumbling = latest.ph === 0 && view && view.r < ARENA_MAX - 0.01;
   $('phase').textContent = latest.ph === 1
@@ -501,6 +508,20 @@ $('hatNext').onclick = () => { chosenHat = (chosenHat + 1) % HATS.length; refres
 refreshLook();
 
 // ==== audio ====
+
+// ticks for the last seconds of a round and of the break before the next one
+let lastTick = null;
+function countdownTick(tl) {
+  const from = latest.ph === 1 ? 3 : 5;
+  const key = `${latest.ph}:${tl}`;
+  if (!joined || tl < 1 || tl > from || key === lastTick) return;
+  lastTick = key;
+  sfx.tick(tl === 1);
+}
+
+document.addEventListener('click', (e) => {
+  if (e.target.closest('button')) sfx.click();
+});
 
 const music = new Music();
 // browsers only allow audio after a gesture; touchend and click are the ones iOS accepts
@@ -685,7 +706,10 @@ function frame(now) {
         fx.burst(s.x + Math.sin(a) * 0.9, 0.4 + Math.random(), s.z + Math.cos(a) * 0.9, { colors: ['#ffd43b', '#fff6c4'], n: 2, speed: 0.6, up: 2, size: 0.09, life: 0.4, gravity: 2 });
       }
       const happened = b.update(s, dt, t);
-      if (happened === 'land') fx.puff(s.x, s.z);
+      if (happened === 'land') {
+        fx.puff(s.x, s.z);
+        if (joined && id === myId) sfx.land();
+      }
       if (happened === 'splash') {
         fx.splash(s.x, s.z, 1.2);
         if (joined) {
