@@ -2,22 +2,22 @@
   "menu": {
     "file": "music/menu.mp3",
     "loopStart": 0.5,
-    "loopEnd": 34.785714285714285
+    "loopEnd": 46.214285714285715
   },
   "jam": {
     "file": "music/jam.mp3",
     "loopStart": 0.5,
-    "loopEnd": 61.45238095238095
+    "loopEnd": 69.07142857142857
   },
   "wobble": {
     "file": "music/wobble.mp3",
     "loopStart": 0.5,
-    "loopEnd": 51.026326530612245
+    "loopEnd": 47.32927437641723
   },
   "final": {
     "file": "music/final.mp3",
     "loopStart": 0.5,
-    "loopEnd": 26.1
+    "loopEnd": 33.60344671201814
   },
   "victory": {
     "file": "music/victory.mp3"
