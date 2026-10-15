@@ -100,3 +100,40 @@ func TestDroppedTilesComeBackUntilTheEnd(t *testing.T) {
 		t.Fatal("near the end of the round tiles stay gone")
 	}
 }
+
+func TestEdgeOfATileHoldsYou(t *testing.T) {
+	g := tilesGame(0)
+	p := g.newPlayer("p", 0, 0, false)
+	i := g.tileAt(0, 0)
+	tile := g.tiles[i]
+	// drop every tile except the one at the middle
+	for k := range g.tiles {
+		if k != i {
+			g.tiles[k].State = tileGone
+		}
+	}
+	// just past the tile's flat edge, most of the blob is still over it
+	p.X, p.Z = tile.X+hexSize*math.Sqrt(3)/2+0.15, tile.Z
+	if !g.supported(p) {
+		t.Fatal("a blob hanging just over the edge should stay up")
+	}
+	p.X = tile.X + hexSize*math.Sqrt(3)/2 + 0.6
+	if g.supported(p) {
+		t.Fatal("a blob mostly over the hole should fall")
+	}
+}
+
+func TestHangingOnAnEdgeStillCracksIt(t *testing.T) {
+	g := tilesGame(0)
+	p := g.newPlayer("p", 0, 0, false)
+	g.tileGraceT = 0
+	i := g.tileAt(0, 0)
+	tile := g.tiles[i]
+	p.X, p.Z = tile.X+hexSize*math.Sqrt(3)/2+0.15, tile.Z
+	j := g.tileAt(p.X, p.Z)
+	g.tiles[j].State, g.tiles[j].T = tileGone, tileRegrow
+	g.updateTiles(1.0 / tickRate)
+	if g.tiles[i].State != tileCracking {
+		t.Fatal("the tile you're hanging on should crack")
+	}
+}

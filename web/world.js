@@ -351,7 +351,8 @@ export class World {
 
       if (want === 'down' && tl.state !== 'falling' && tl.state !== 'gone') {
         tl.state = 'falling';
-        tl.vy = 1.5;
+        // crumbling edges pop up first; a Hex Drop tile goes straight down so it never sits under a falling blob
+        tl.vy = tiles ? -4 : 1.5;
         tl.splashed = false;
         this.setTileLook(tl, true);
         if (this.primed && this.fxReady('dust')) this.fx?.dust(tl.x, 0.2, tl.z);

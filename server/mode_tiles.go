@@ -22,6 +22,10 @@ const (
 	tileNoRegrow = 30.0 // in the last this many seconds, gone is gone
 	tileBotRange = 6.0
 
+	footSamples = 8
+	footRadius  = 0.5
+	footNeeded  = 3 // of the samples around the centre
+
 	tileLives     = 2
 	tileBumpScale = 0.5 // Hex Drop is about footwork, so bumps only nudge
 
@@ -80,6 +84,29 @@ func (g *Game) tileAt(x, z float64) int {
 	return i
 }
 
+// supported says whether a blob still has ground under it. Only checking the centre made blobs
+// drop through the edge of a tile they were visibly standing on, so the blob's footprint counts:
+// it stays up while its centre or enough of the ring around it is over solid tiles.
+func (g *Game) supported(p *Player) bool {
+	if g.solidAt(p.X, p.Z) {
+		return true
+	}
+	on := 0
+	for k := range footSamples {
+		a := float64(k) * 2 * math.Pi / footSamples
+		if g.solidAt(p.X+math.Sin(a)*footRadius, p.Z+math.Cos(a)*footRadius) {
+			on++
+		}
+	}
+	return on >= footNeeded
+}
+
+func (g *Game) crack(i int) {
+	if g.tiles[i].State == tileSolid {
+		g.tiles[i].State, g.tiles[i].T = tileCracking, tileCrumble
+	}
+}
+
 func (g *Game) solidAt(x, z float64) bool {
 	i := g.tileAt(x, z)
 	return i >= 0 && g.tiles[i].State != tileGone
@@ -123,12 +150,23 @@ func (g *Game) updateTiles(dt float64) {
 			continue
 		}
 		i := g.tileAt(p.X, p.Z)
-		if i < 0 || g.tiles[i].State == tileGone {
+		if !g.supported(p) {
 			g.knockOut(p)
 			continue
 		}
-		if g.tiles[i].State == tileSolid && g.tileGraceT == 0 {
-			g.tiles[i].State, g.tiles[i].T = tileCracking, tileCrumble
+		if g.tileGraceT > 0 {
+			continue
+		}
+		if i >= 0 && g.tiles[i].State != tileGone {
+			g.crack(i)
+			continue
+		}
+		// hanging on the edge of the neighbouring tiles cracks those, so it's no hiding place
+		for k := range footSamples {
+			a := float64(k) * 2 * math.Pi / footSamples
+			if j := g.tileAt(p.X+math.Sin(a)*footRadius, p.Z+math.Cos(a)*footRadius); j >= 0 {
+				g.crack(j)
+			}
 		}
 	}
 }

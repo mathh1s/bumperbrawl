@@ -977,7 +977,9 @@ function frame(now) {
     }
   }
 
-  world.update(dt, view?.r ?? null, camera, view?.hx ?? null);
+  // tiles use the newest snapshot: your own blob is predicted ahead of the interpolated view,
+  // and a tile that looks solid under it after the server dropped it reads as falling through
+  world.update(dt, view?.r ?? null, camera, view?.hx ? latest?.hx ?? view.hx : null);
   crates.sync(view?.crates ?? [], dt, t);
   sweeper.update(view?.sw, dt);
   hillRing.update(view?.hl, dt, t, (id) => roster.get(id)?.c ?? 0);
