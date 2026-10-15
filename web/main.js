@@ -282,7 +282,7 @@ const input = new Input(() => {
   }
   send({ t: 'dash' });
 });
-if (isTouch) input.bindTouch({ pad: $('pad'), stick: $('stick'), knob: $('knob'), dashBtn: $('dashBtn') });
+if (isTouch) input.bindTouch({ pad: $('pad'), stick: $('stick'), knob: $('knob'), dashBtn: $('dashBtn'), canvas });
 
 let lastSent = { x: 0, z: 0 };
 let sendClock = 0;

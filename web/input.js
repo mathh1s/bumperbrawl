@@ -33,7 +33,14 @@ export class Input {
     return { x, z };
   }
 
-  bindTouch({ pad, stick, knob, dashBtn }) {
+  bindTouch({ pad, stick, knob, dashBtn, canvas }) {
+    // iOS Safari ignores user-scalable=no, so pinch and double-tap zoom must be cancelled on the raw touch events
+    const block = (e) => e.preventDefault();
+    for (const el of [pad, dashBtn, canvas]) {
+      for (const type of ['touchstart', 'touchmove', 'touchend']) el.addEventListener(type, block, { passive: false });
+    }
+    for (const type of ['gesturestart', 'gesturechange', 'gestureend']) document.addEventListener(type, block);
+
     let active = null;
     let ox = 0, oy = 0;
     const home = { left: stick.style.left, bottom: stick.style.bottom };
