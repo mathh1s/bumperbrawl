@@ -71,6 +71,7 @@ func (g *Game) run(stop <-chan struct{}) {
 		g.step(1.0 / tickRate)
 		if g.tick%sendEvery == 0 && len(g.clients) > 0 {
 			g.broadcast(g.snapshot())
+			g.selfStates()
 		}
 		g.mu.Unlock()
 	}

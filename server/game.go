@@ -13,8 +13,6 @@ const (
 	tickRate     = 60
 	sendEvery    = 3 // 20 snapshots per second
 	playerRadius = 0.8
-	accel        = 34.0
-	drag         = 3.2
 	dashImpulse  = 15.0
 	dashCooldown = 1.1
 	dashTime     = 0.28
@@ -63,24 +61,28 @@ type Player struct {
 	Angle      float64
 
 	InX, InZ float64
+	Ack      int64 // last input step the client numbered
+	AckTicks int   // ticks simulated since that input arrived
 	WantDash bool
 	WantJump bool
 	Airborne bool
 	JumpCD   float64
 	SweepCD  float64
 
-	DashCD    float64
-	DashT     float64
-	DashPow   float64
-	DashCDMax float64
-	Charging  bool
-	ChargeT   float64
-	Pow       int
-	PowT      float64
-	PoundT    float64
-	Ghost     float64
-	Falling   bool
-	FallT     float64
+	DashCD     float64
+	DashT      float64
+	DashPow    float64
+	DashCDMax  float64
+	Charging   bool
+	ChargeT    float64
+	ChargeStep int64
+	Pow        int
+	PowT       float64
+	PoundT     float64
+	Ghost      float64
+	Stun       float64
+	Falling    bool
+	FallT      float64
 
 	LastHitBy int
 	LastHitT  float64
@@ -229,7 +231,7 @@ func (g *Game) respawn(p *Player) {
 	p.DashCD, p.DashT = 0, 0
 	p.Charging, p.ChargeT = false, 0
 	p.Pow, p.PowT, p.PoundT = powNone, 0, 0
-	p.Airborne, p.JumpCD, p.SweepCD = false, 0, 0
+	p.Airborne, p.JumpCD, p.SweepCD, p.Stun = false, 0, 0, 0
 	p.LastHitBy = 0
 	p.Angle = math.Atan2(-p.X, -p.Z)
 }
@@ -283,44 +285,7 @@ func (g *Game) step(dt float64) {
 		g.updatePower(p, dt)
 		g.updateJump(p, dt)
 
-		inLen := math.Hypot(p.InX, p.InZ)
-		if inLen > 0.1 {
-			p.Angle = math.Atan2(p.InX, p.InZ)
-		}
-		acc := accel
-		if p.Pow == powHeavy {
-			acc *= heavySlow
-		}
-		if p.Charging {
-			p.ChargeT = math.Min(chargeMax, p.ChargeT+dt)
-			acc *= chargeSlow
-		}
-		p.VX += p.InX * acc * dt
-		p.VZ += p.InZ * acc * dt
-
-		if p.WantDash && p.DashCD == 0 {
-			// a tap is a plain dash; holding trades mobility for a longer, heavier launch
-			pow := 0.0
-			if p.Charging {
-				pow = p.ChargeT / chargeMax
-			}
-			imp := dashImpulse * (1 + 0.9*pow)
-			p.VX += math.Sin(p.Angle) * imp
-			p.VZ += math.Cos(p.Angle) * imp
-			p.DashCD = dashCooldown + 0.6*pow
-			p.DashCDMax = p.DashCD
-			p.DashT = dashTime * (1 + 0.6*pow)
-			p.DashPow = pow
-			p.Charging, p.ChargeT = false, 0
-			p.Ghost = 0
-		}
-		p.WantDash = false
-
-		damp := 1 - drag*dt
-		p.VX *= damp
-		p.VZ *= damp
-		p.X += p.VX * dt
-		p.Z += p.VZ * dt
+		p.move(dt)
 	}
 
 	g.collide()
@@ -336,6 +301,9 @@ func (g *Game) step(dt float64) {
 		}
 	}
 	g.updateCrown()
+	for _, p := range g.players {
+		p.AckTicks++
+	}
 	if g.phase == phasePlay && g.mode == modeLast && g.lastStandingDone() {
 		g.endRound()
 	}
@@ -395,10 +363,8 @@ func (g *Game) collide() {
 			if a.Pow == powBounce {
 				kb *= bounceKick
 			}
-			a.VX -= nx * ka * ia
-			a.VZ -= nz * ka * ia
-			b.VX += nx * kb * ib
-			b.VZ += nz * kb * ib
+			a.shove(-nx*ka*ia, -nz*ka*ia)
+			b.shove(nx*kb*ib, nz*kb*ib)
 
 			a.LastHitBy, a.LastHitT = b.ID, g.now
 			b.LastHitBy, b.LastHitT = a.ID, g.now
@@ -625,11 +591,15 @@ type inMsg struct {
 	H int     `json:"h"`
 	X float64 `json:"x"`
 	Z float64 `json:"z"`
+	S int64   `json:"s"`
 }
 
 func (g *Game) handle(c *Client, m inMsg) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	if p := c.player; p != nil && m.S > p.Ack {
+		p.Ack, p.AckTicks = m.S, 0
+	}
 	switch m.T {
 	case "join":
 		if c.player != nil {
@@ -651,7 +621,7 @@ func (g *Game) handle(c *Client, m inMsg) {
 		g.syncBots()
 		g.queue(c, mustJSON(map[string]any{
 			"t": "welcome", "id": c.player.ID, "room": g.code,
-			"cfg": map[string]any{"pr": playerRadius, "max": arenaMax, "min": arenaMin, "cd": dashCooldown},
+			"cfg": map[string]any{"pr": playerRadius, "max": arenaMax, "min": arenaMin, "cd": dashCooldown, "mv": movementConfig()},
 		}))
 		g.broadcast(g.rosterMsg())
 	case "in":
@@ -665,15 +635,21 @@ func (g *Game) handle(c *Client, m inMsg) {
 		c.player.InX, c.player.InZ = x, z
 	case "charge":
 		if p := c.player; p != nil && !p.Falling && p.DashCD == 0 && !p.Charging {
-			p.Charging, p.ChargeT = true, 0
+			p.Charging, p.ChargeT, p.ChargeStep = true, 0, m.S
 		}
 	case "jump":
 		if c.player != nil {
 			c.player.WantJump = true
 		}
 	case "dash":
-		if c.player != nil {
-			c.player.WantDash = true
+		if p := c.player; p != nil {
+			p.WantDash = true
+			// time the charge by the client's steps so its prediction launches with the same power;
+			// arrival times jitter by a tick or two. It can't claim more than it actually held.
+			if p.Charging && p.ChargeStep > 0 && m.S > p.ChargeStep {
+				held := float64(m.S-p.ChargeStep) / tickRate
+				p.ChargeT = math.Min(chargeMax, math.Min(held, p.ChargeT+0.1))
+			}
 		}
 	}
 }
@@ -780,6 +756,31 @@ func (g *Game) snapshot() []byte {
 	}
 	return mustJSON(msg)
 }
+
+// selfStates tells each client the full physics state of its own blob. The client predicts its blob
+// ahead of the snapshots and, with these, replays the inputs the server had not seen yet.
+func (g *Game) selfStates() {
+	for c := range g.clients {
+		p := c.player
+		if p == nil {
+			continue
+		}
+		bits := 0
+		if p.Charging {
+			bits |= 1
+		}
+		if p.Airborne {
+			bits |= 2
+		}
+		g.queue(c, mustJSON(map[string]any{
+			"t": "me", "s": p.Ack, "k": p.AckTicks, "b": bits,
+			"st": [11]float64{r3(p.X), r3(p.Z), r3(p.Y), r3(p.VX), r3(p.VZ), r3(p.VY),
+				r3(p.Stun), r3(p.DashT), r3(p.DashCD), r3(p.ChargeT), r3(p.JumpCD)},
+		}))
+	}
+}
+
+func r3(v float64) float64 { return math.Round(v*1000) / 1000 }
 
 func r2(v float64) float64 { return math.Round(v*100) / 100 }
 

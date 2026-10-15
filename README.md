@@ -3,7 +3,7 @@
 A small online 3D party brawler. Everyone is a squishy blob on a floating hex island. Bump and dash into other players to knock them into the sea. After 15 seconds the island starts crumbling from the edges, so the arena gets tighter until the round ends. A match is several rounds of different modes, and whoever wins the most rounds wins the match.
 
 - Server: Go, authoritative physics at 60 Hz, state broadcast at 20 Hz over WebSockets
-- Client: Three.js (vendored, no CDN), toon-shaded low-poly look, snapshot interpolation
+- Client: Three.js (vendored, no CDN), toon-shaded low-poly look, snapshot interpolation for other players and client-side prediction with server reconciliation for your own
 - Bots top the lobby up to `MIN_PLAYERS` whenever at least one human is playing
 - Works on desktop (WASD / arrows, Shift dash, Space jump) and touch (virtual stick, dash and jump buttons)
 - Matches of several rounds, each in one of four modes; the most round wins takes the match:
@@ -78,8 +78,10 @@ This rewrites the mp3 files and `web/music/tracks.json` (loop points). The sound
 
 ```
 server/  game.go   simulation, rounds, bots, snapshots
+         movement.go  steering, dashes, knockback control (mirrored in web/predict.js)
          main.go   http server, websocket handling, game loop
 web/     main.js   netcode, interpolation, camera, HUD
+         predict.js  client-side prediction of your own blob
          world.js  sky, water, crumbling island, scenery
          blobs.js    player characters and hats
          preview.js  blob preview in the menu

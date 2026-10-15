@@ -145,8 +145,7 @@ func (g *Game) slam(p *Player) {
 			dx, dz, d = 1, 0, 1
 		}
 		f := (poundForce*(1-d/poundRadius) + 4) / o.mass()
-		o.VX += dx / d * f
-		o.VZ += dz / d * f
+		o.shove(dx/d*f, dz/d*f)
 		o.LastHitBy, o.LastHitT = p.ID, g.now
 	}
 	g.events = append(g.events, map[string]any{"k": "pd", "i": p.ID, "x": r2(p.X), "z": r2(p.Z)})

@@ -80,8 +80,7 @@ func (g *Game) updateSweeper(dt float64) {
 		shift := side*reach - perp
 		p.X += -uz * shift
 		p.Z += ux * shift
-		p.VX += -uz * side * impulse
-		p.VZ += ux * side * impulse
+		p.shove(-uz*side*impulse, ux*side*impulse)
 		p.SweepCD = sweepImmune
 		g.events = append(g.events, map[string]any{"k": "swh", "x": r2(p.X), "z": r2(p.Z)})
 	}

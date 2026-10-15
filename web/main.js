@@ -11,6 +11,7 @@ import { Crates, POWERS } from './crates.js';
 import { modeOf, OUT } from './modes.js';
 import { Input } from './input.js';
 import { initAudio, sfx } from './audio.js';
+import { Predictor } from './predict.js';
 import { Music } from './music.js';
 
 const INTERP_MS = 110;
@@ -68,6 +69,7 @@ const snaps = [];
 const pending = [];
 let clockOffset = null;
 let latest = null;
+let predictor = null;
 
 // ==== network ====
 
@@ -84,6 +86,7 @@ function connect() {
     $('play').disabled = true;
     setStatus('Disconnected, retrying…');
     myId = null;
+    predictor = null;
     snaps.length = 0;
     clockOffset = null;
     setTimeout(connect, 1500);
@@ -106,6 +109,7 @@ function onMessage(m) {
     case 'welcome':
       myId = m.id;
       joined = true;
+      predictor = new Predictor(m.cfg.mv, send);
       $('menu').hidden = true;
       $('hud').hidden = false;
       $('touch').hidden = !isTouch;
@@ -116,6 +120,12 @@ function onMessage(m) {
       break;
     case 's':
       onSnapshot(m);
+      break;
+    case 'me':
+      if (predictor) {
+        predictor.setFlags(latest?.players.get(myId)?.flags ?? 0);
+        predictor.reconcile(m);
+      }
       break;
   }
 }
@@ -423,51 +433,40 @@ function updateHud(dt, view) {
 
 // ==== input ====
 
-function dashReady() {
-  const me = latest?.players.get(myId);
-  return me && me.cd === 0 && !(me.flags & 4) ? me : null;
-}
-
 const input = new Input({
   onDashDown() {
-    if (!joined) return;
-    if (dashReady()) sfx.chargeStart();
-    send({ t: 'charge' });
+    if (!predictor) return;
+    if (predictor.canDash()) sfx.chargeStart();
+    predictor.press('charge');
   },
   onJump() {
-    if (!joined) return;
-    const me = latest?.players.get(myId);
-    if (me && me.y <= 0.01 && !(me.flags & 4)) sfx.jump();
-    send({ t: 'jump' });
+    if (!predictor) return;
+    if (predictor.canJump()) sfx.jump();
+    predictor.press('jump');
   },
   onDashUp() {
-    if (!joined) return;
+    if (!predictor) return;
     sfx.chargeStop();
-    const me = dashReady();
-    if (me) {
-      sfx.dash(me.flags & 8 ? me.ch : 0);
+    if (predictor.canDash()) {
+      const st = predictor.st;
+      sfx.dash(st.charging ? st.chargeT / predictor.c.chargeMax : 0);
       const b = blobs.get(myId);
       if (b) fx.puff(b.group.position.x, b.group.position.z);
     }
-    send({ t: 'dash' });
+    predictor.press('dash');
   },
 });
 if (isTouch) input.bindTouch({ pad: $('pad'), stick: $('stick'), knob: $('knob'), dashBtn: $('dashBtn'), jumpBtn: $('jumpBtn'), canvas });
 
-let lastSent = { x: 0, z: 0 };
-let sendClock = 0;
-let keepAlive = 0;
-function pumpInput(dt) {
-  sendClock += dt;
-  keepAlive += dt;
-  if (!joined || sendClock < 1 / 30) return;
-  sendClock = 0;
-  const v = input.vector();
-  if (Math.hypot(v.x - lastSent.x, v.z - lastSent.z) > 0.03 || keepAlive > 0.5) {
-    send({ t: 'in', x: +v.x.toFixed(3), z: +v.z.toFixed(3) });
-    lastSent = v;
-    keepAlive = 0;
-  }
+// your own blob is drawn where the predictor has it, not where the last snapshot did
+function applyPrediction(view) {
+  const pv = predictor?.view();
+  const s = view?.players.get(myId);
+  if (!pv || !s) return;
+  let flags = s.flags & ~(1 | 8);
+  if (pv.charging) flags |= 8;
+  if (pv.dashing) flags |= 1;
+  view.players.set(myId, { ...s, x: pv.x, y: pv.y, z: pv.z, a: pv.a, ch: pv.ch, flags });
 }
 
 // ==== menu ====
@@ -683,12 +682,15 @@ let t = 0;
 
 function frame(now) {
   requestAnimationFrame(frame);
-  const dt = Math.min(0.05, (now - last) / 1000);
+  const raw = (now - last) / 1000;
+  const dt = Math.min(0.05, raw);
   last = now;
   t += dt;
 
+  if (joined && predictor) predictor.update(raw, input.vector());
   const rt = now - INTERP_MS;
   const view = sample(rt);
+  applyPrediction(view);
   fireEvents(rt, view);
 
   if (view) {
@@ -739,7 +741,6 @@ function frame(now) {
   if (view?.hl) popHillPoints(view);
   pointToHill(view?.hl);
   fx.update(dt);
-  pumpInput(dt);
   updateCamera(dt, view);
   updateHud(dt, view);
   music.play(pickTrack(view));
