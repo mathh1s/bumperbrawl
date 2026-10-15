@@ -388,6 +388,30 @@ kbd {
 #board .out { font-size: 11px; opacity: 0.55; text-transform: uppercase; }
 #board .wins { font-size: 11px; font-weight: 700; color: #e8a400; -webkit-text-stroke: 0.4px var(--ink); }
 
+/* ==== spectating ==== */
+
+#spectate {
+  position: absolute; left: 50%; bottom: 96px;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 12px;
+  pointer-events: auto;
+  padding: 6px 8px;
+  font-weight: 600;
+  background: rgba(255, 250, 240, 0.95);
+  border: 3px solid var(--ink); border-radius: 18px;
+  box-shadow: 0 4px 0 var(--ink);
+  white-space: nowrap;
+}
+#spectate b { color: var(--accent); }
+#spectate button {
+  width: 34px; height: 34px; padding: 0 0 3px;
+  font: 700 22px/1 var(--font); color: var(--ink);
+  background: #fff; border: 3px solid var(--ink); border-radius: 50%;
+  box-shadow: 0 3px 0 var(--ink); cursor: pointer;
+}
+#spectate button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--ink); }
+body.touch #spectate { bottom: auto; top: 96px; }
+
 /* ==== match awards ==== */
 
 #awards {
