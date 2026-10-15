@@ -71,6 +71,9 @@ type Player struct {
 	DashCDMax float64
 	Charging  bool
 	ChargeT   float64
+	Pow       int
+	PowT      float64
+	PoundT    float64
 	Ghost     float64
 	Falling   bool
 	FallT     float64
@@ -102,6 +105,9 @@ type Game struct {
 	radius     float64
 	minPlayers int
 	events     []map[string]any
+	crates     []*Crate
+	crateT     float64
+	nextCrate  int
 }
 
 func NewGame(minPlayers int) *Game {
@@ -120,6 +126,7 @@ func (g *Game) startRound() {
 	g.phase = phasePlay
 	g.phaseT = roundTime
 	g.radius = arenaMax
+	g.clearCrates()
 	for _, p := range g.players {
 		p.Score = 0
 		g.respawn(p)
@@ -130,6 +137,7 @@ func (g *Game) startRound() {
 func (g *Game) endRound() {
 	g.phase = phaseEnd
 	g.phaseT = intermission
+	g.clearCrates()
 	var best *Player
 	tie := false
 	for _, p := range g.players {
@@ -184,6 +192,7 @@ func (g *Game) respawn(p *Player) {
 	p.Ghost = ghostTime
 	p.DashCD, p.DashT = 0, 0
 	p.Charging, p.ChargeT = false, 0
+	p.Pow, p.PowT, p.PoundT = powNone, 0, 0
 	p.LastHitBy = 0
 	p.Angle = math.Atan2(-p.X, -p.Z)
 }
@@ -222,12 +231,16 @@ func (g *Game) step(dt float64) {
 		p.Ghost = math.Max(0, p.Ghost-dt)
 		p.DashCD = math.Max(0, p.DashCD-dt)
 		p.DashT = math.Max(0, p.DashT-dt)
+		g.updatePower(p, dt)
 
 		inLen := math.Hypot(p.InX, p.InZ)
 		if inLen > 0.1 {
 			p.Angle = math.Atan2(p.InX, p.InZ)
 		}
 		acc := accel
+		if p.Pow == powHeavy {
+			acc *= heavySlow
+		}
 		if p.Charging {
 			p.ChargeT = math.Min(chargeMax, p.ChargeT+dt)
 			acc *= chargeSlow
@@ -261,25 +274,31 @@ func (g *Game) step(dt float64) {
 	}
 
 	g.collide()
+	g.updateCrates(dt)
 
 	for _, p := range g.players {
-		if !p.Falling && math.Hypot(p.X, p.Z) > g.radius {
+		// a ground pound is airborne, so leaving the island only counts once it lands
+		if !p.Falling && p.PoundT == 0 && math.Hypot(p.X, p.Z) > g.radius {
 			g.knockOut(p)
 		}
 	}
 }
 
 func (p *Player) mass() float64 {
+	m := 1.0
 	if p.DashT > 0 {
-		return dashMass * (1 + 0.7*p.DashPow)
+		m = dashMass * (1 + 0.7*p.DashPow)
 	}
-	return 1
+	if p.Pow == powHeavy {
+		m *= heavyMass
+	}
+	return m
 }
 
 func (g *Game) collide() {
 	list := make([]*Player, 0, len(g.players))
 	for _, p := range g.players {
-		if !p.Falling && p.Ghost == 0 {
+		if !p.Falling && p.Ghost == 0 && p.PoundT == 0 {
 			list = append(list, p)
 		}
 	}
@@ -288,7 +307,7 @@ func (g *Game) collide() {
 			a, b := list[i], list[j]
 			dx, dz := b.X-a.X, b.Z-a.Z
 			d := math.Hypot(dx, dz)
-			overlap := playerRadius*2 - d
+			overlap := a.radius() + b.radius() - d
 			if overlap <= 0 {
 				continue
 			}
@@ -309,16 +328,23 @@ func (g *Game) collide() {
 			j := -(1 + restitution) * vn / (ia + ib)
 			// flat kick on top of the impulse so even slow touches feel like a bonk
 			kick := j + bumpKick
-			a.VX -= nx * kick * ia
-			a.VZ -= nz * kick * ia
-			b.VX += nx * kick * ib
-			b.VZ += nz * kick * ib
+			ka, kb := kick, kick
+			if b.Pow == powBounce {
+				ka *= bounceKick
+			}
+			if a.Pow == powBounce {
+				kb *= bounceKick
+			}
+			a.VX -= nx * ka * ia
+			a.VZ -= nz * ka * ia
+			b.VX += nx * kb * ib
+			b.VZ += nz * kb * ib
 
 			a.LastHitBy, a.LastHitT = b.ID, g.now
 			b.LastHitBy, b.LastHitT = a.ID, g.now
 			if j > 6 {
 				g.events = append(g.events, map[string]any{
-					"k": "b", "x": r2(a.X + nx*playerRadius), "z": r2(a.Z + nz*playerRadius), "p": r2(j),
+					"k": "b", "x": r2(a.X + nx*a.radius()), "z": r2(a.Z + nz*a.radius()), "p": r2(math.Max(ka, kb)),
 				})
 			}
 		}
@@ -328,6 +354,7 @@ func (g *Game) collide() {
 func (g *Game) knockOut(p *Player) {
 	p.Falling = true
 	p.Charging = false
+	p.Pow, p.PowT, p.PoundT = powNone, 0, 0
 	p.FallT = 0
 	p.VY = 3
 	killer := 0
@@ -412,6 +439,9 @@ func (g *Game) thinkBots(dt float64) {
 		if target != nil {
 			// aim slightly past the target on the far side from center to push it outward
 			dx, dz = target.X-b.X+target.X*0.15, target.Z-b.Z+target.Z*0.15
+		}
+		if tx, tz, ok := g.botCrateTarget(b); ok {
+			dx, dz = tx-b.X, tz-b.Z
 		}
 		dx += (rand.Float64() - 0.5) * 3
 		dz += (rand.Float64() - 0.5) * 3
@@ -581,7 +611,7 @@ func (g *Game) rosterMsg() []byte {
 }
 
 func (g *Game) snapshot() []byte {
-	ps := make([][9]float64, 0, len(g.players))
+	ps := make([][10]float64, 0, len(g.players))
 	for _, p := range g.players {
 		flags := 0
 		if p.DashT > 0 {
@@ -596,18 +626,27 @@ func (g *Game) snapshot() []byte {
 		if p.Charging {
 			flags |= flagCharge
 		}
+		switch p.Pow {
+		case powHeavy:
+			flags |= flagHeavy
+		case powBounce:
+			flags |= flagBounce
+		}
+		if p.PoundT > 0 {
+			flags |= flagPound
+		}
 		cd := 0.0
 		if p.DashCDMax > 0 {
 			cd = p.DashCD / p.DashCDMax
 		}
-		ps = append(ps, [9]float64{
+		ps = append(ps, [10]float64{
 			float64(p.ID), r2(p.X), r2(p.Z), r2(p.Y), r2(p.Angle),
-			float64(flags), r2(cd), float64(p.Score), r2(p.ChargeT / chargeMax),
+			float64(flags), r2(cd), float64(p.Score), r2(p.ChargeT / chargeMax), r2(p.PowT),
 		})
 	}
 	msg := map[string]any{
 		"t": "s", "now": r2(g.now), "r": r2(g.radius),
-		"ph": g.phase, "tl": r2(math.Max(0, g.phaseT)), "p": ps,
+		"ph": g.phase, "tl": r2(math.Max(0, g.phaseT)), "p": ps, "c": g.crateList(),
 	}
 	if len(g.events) > 0 {
 		msg["e"] = g.events

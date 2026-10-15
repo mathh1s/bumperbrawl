@@ -222,6 +222,26 @@ kbd {
 #banner.show { opacity: 1; transform: scale(1); }
 #banner small { display: block; font-size: 0.42em; -webkit-text-stroke: 2px var(--ink); margin-top: 6px; }
 
+#power {
+  position: absolute; bottom: 92px; left: 50%;
+  transform: translateX(-50%);
+  min-width: 140px;
+  padding: 4px 12px 8px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+  color: #fff;
+  background: var(--c);
+  border: 3px solid var(--ink);
+  border-radius: 14px;
+  box-shadow: 0 4px 0 var(--ink);
+  -webkit-text-stroke: 1px var(--ink);
+  paint-order: stroke fill;
+}
+#power .bar { height: 6px; margin-top: 3px; border-radius: 3px; background: rgba(45, 36, 64, 0.35); overflow: hidden; }
+#power .bar i { display: block; height: 100%; background: #fff; }
+body.touch #power { bottom: 84px; }
+
 #dash {
   position: absolute; bottom: 18px; left: 50%;
   transform: translateX(-50%);

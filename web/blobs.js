@@ -20,6 +20,9 @@ const INK = new THREE.MeshBasicMaterial({ color: '#2d2440' });
 const BLUSH = new THREE.MeshBasicMaterial({ color: '#ff7a95', transparent: true, opacity: 0.5, depthWrite: false });
 const MARK_MAT = new THREE.MeshBasicMaterial({ color: '#fffaf0', transparent: true, opacity: 0.85, depthWrite: false });
 
+const BOUNCE_GLOW = new THREE.Color('#51cf66');
+const GLOW_TMP = new THREE.Color();
+
 const EYE_Y = 0.2;
 const EYE_X = 0.27;
 
@@ -237,6 +240,7 @@ export class Blob {
     this.ghost = false;
     this.wasDashing = false;
     this.lastCharge = 0;
+    this.size = 1;
     this.hitT = 0;
     this.blinkT = 2 + Math.random() * 3;
     // jelly spring: positive squashes, negative stretches
@@ -285,6 +289,11 @@ export class Blob {
     const dashing = (s.flags & 1) !== 0;
     const ghost = (s.flags & 2) !== 0;
     const charge = s.flags & 8 ? s.ch : 0;
+    const heavy = (s.flags & 16) !== 0;
+    const bouncy = (s.flags & 32) !== 0;
+    const pounding = (s.flags & 64) !== 0;
+    this.size += ((heavy ? 1.3 : 1) - this.size) * Math.min(1, dt * 8);
+    this.group.scale.setScalar(this.size);
     if (dashing && !this.wasDashing) this.jellyV -= 6 + this.lastCharge * 8;
     this.wasDashing = dashing;
     this.lastCharge = charge || (dashing ? this.lastCharge : 0);
@@ -293,6 +302,7 @@ export class Blob {
     const tremble = Math.sin(t * 70) * 0.035 * charge;
     this.group.position.set(s.x + tremble, Math.max(s.y, -30), s.z);
     this.mat.emissive.copy(this.mat.color).multiplyScalar(0.45 * charge);
+    if (bouncy) this.mat.emissive.add(GLOW_TMP.copy(BOUNCE_GLOW).multiplyScalar(0.3 + Math.sin(t * 9) * 0.15));
     this.group.rotation.y = s.a;
 
     this.jellyV += (-260 * this.jelly - 10 * this.jellyV) * dt;
@@ -301,6 +311,7 @@ export class Blob {
     let sx = 1 + j * 0.45, sy = 1 - j, sz = 1 + j * 0.45;
     if (dashing) { sx *= 0.86; sy *= 0.88; sz *= 1.25; }
     sx *= 1 + 0.12 * charge; sy *= 1 - 0.22 * charge; sz *= 1 + 0.12 * charge;
+    if (pounding) { sx *= 0.9; sy *= 0.8; sz *= 0.9; }
     this.pivot.scale.set(sx, sy, sz);
 
     const move = Math.min(this.speed / 7, 1);

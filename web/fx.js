@@ -44,7 +44,32 @@ export class FX {
     this.parts = [];
     this.rings = [];
     this.stars = [];
+    this.texts = [];
     this.starMap = starTexture();
+  }
+
+  text(x, y, z, str, color) {
+    const c = document.createElement('canvas');
+    c.width = 384;
+    c.height = 96;
+    const g = c.getContext('2d');
+    g.font = '700 52px Fredoka, ui-rounded, sans-serif';
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.lineJoin = 'round';
+    g.lineWidth = 12;
+    g.strokeStyle = '#2d2440';
+    g.strokeText(str, 192, 50);
+    g.fillStyle = color;
+    g.fillText(str, 192, 50);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false }));
+    s.scale.set(4, 1, 1);
+    s.position.set(x, y, z);
+    s.renderOrder = 21;
+    this.scene.add(s);
+    this.texts.push({ s, life: 1.3, max: 1.3 });
   }
 
   burst(x, y, z, { colors = ['#ffffff'], n = 10, speed = 5, up = 4, life = 0.6, size = 0.15, gravity = 14, soft = false, grow = false } = {}) {
@@ -99,6 +124,17 @@ export class FX {
     this.burst(x, y, z, { colors: ['#e8d3b0', '#d4b98e', '#f5ead6'], n: 7, speed: 1.6, up: 1.4, life: 0.8, size: 0.3, gravity: 1, soft: true, grow: true });
   }
 
+  pound(x, z) {
+    this.ring(x, z, '#ffffff', 6);
+    this.ring(x, z, '#ff922b', 4.5);
+    this.burst(x, 0.3, z, { colors: ['#e8d3b0', '#d4b98e', '#ffffff'], n: 18, speed: 7, up: 2, life: 0.7, size: 0.32, gravity: 3, soft: true, grow: true });
+  }
+
+  pickup(x, z, color) {
+    this.burst(x, 1, z, { colors: [color, '#ffffff', '#ffd43b'], n: 16, speed: 3, up: 6, life: 0.7, size: 0.14 });
+    this.ring(x, z, color, 2.5);
+  }
+
   puff(x, z) {
     this.burst(x, 0.25, z, { colors: ['#ffffff', '#f1e3c8'], n: 6, speed: 2.2, up: 1.5, life: 0.5, size: 0.22, gravity: 2, soft: true, grow: true });
   }
@@ -148,6 +184,22 @@ export class FX {
       const k = 1 - s.life / s.max;
       s.s.scale.setScalar(s.size * (k < 0.3 ? k / 0.3 : 1 - (k - 0.3) * 0.6));
       s.s.material.opacity = 1 - Math.max(0, k - 0.5) * 2;
+    }
+    for (let i = this.texts.length - 1; i >= 0; i--) {
+      const tx = this.texts[i];
+      tx.life -= dt;
+      if (tx.life <= 0) {
+        tx.s.removeFromParent();
+        tx.s.material.map.dispose();
+        tx.s.material.dispose();
+        this.texts.splice(i, 1);
+        continue;
+      }
+      const k = 1 - tx.life / tx.max;
+      tx.s.position.y += dt * 1.4;
+      tx.s.material.opacity = Math.min(1, (1 - k) / 0.4);
+      const pop = k < 0.15 ? 0.6 + (k / 0.15) * 0.5 : 1.1 - Math.min(0.1, (k - 0.15));
+      tx.s.scale.set(4 * pop, pop, 1);
     }
   }
 }

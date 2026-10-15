@@ -3,6 +3,7 @@ import { World, makeRamp } from './world.js';
 import { Blob, PALETTE, HATS } from './blobs.js';
 import { Preview } from './preview.js';
 import { FX } from './fx.js';
+import { Crates, POWERS } from './crates.js';
 import { Input } from './input.js';
 import { initAudio, sfx } from './audio.js';
 import { Music } from './music.js';
@@ -26,6 +27,7 @@ camera.position.set(0, 30, 30);
 const ramp = makeRamp();
 const fx = new FX(scene);
 const world = new World(scene, ramp, ARENA_MAX, fx);
+const crates = new Crates(scene, ramp);
 
 function resize() {
   const w = innerWidth, h = innerHeight;
@@ -109,10 +111,10 @@ function onSnapshot(m) {
 
   const players = new Map();
   for (const a of m.p) {
-    players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0 });
+    players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0 });
   }
   const t = m.now * 1000 + clockOffset;
-  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players };
+  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [] };
   snaps.push(snap);
   if (snaps.length > 60) snaps.shift();
   latest = snap;
@@ -151,9 +153,10 @@ function sample(rt) {
       cd: pb.cd,
       score: pb.score,
       ch: pa.ch + (pb.ch - pa.ch) * k,
+      pw: pb.pw,
     });
   }
-  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players };
+  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates };
 }
 
 // ==== events ====
@@ -193,6 +196,31 @@ function fireEvents(rt, view) {
         }
         break;
       }
+      case 'pk': {
+        const p = playerPos(e.i, view);
+        const info = POWERS[e.c];
+        if (p && info) {
+          fx.pickup(p.x, p.z, info.color);
+          fx.text(p.x, 3.4, p.z, `${info.name}!`, info.color);
+        }
+        if (joined) sfx.pickup();
+        if (e.i === myId && info) banner(`${info.name}!<small>${info.blurb}</small>`, 1200);
+        break;
+      }
+      case 'pd': {
+        fx.pound(e.x, e.z);
+        for (const [id, b] of blobs) {
+          const p = playerPos(id, view);
+          if (p && id !== e.i && Math.hypot(p.x - e.x, p.z - e.z) < 4.5) b.bump(14);
+        }
+        const near = me ? Math.hypot(me.x - e.x, me.z - e.z) < 7 : false;
+        if (joined) sfx.pound(near);
+        if (near) shake = 0.7;
+        break;
+      }
+      case 'cg':
+        fx.dust(e.x, 0.4, e.z);
+        break;
       case 'start':
         if (joined) { banner('Brawl!', 1200); sfx.start(); }
         break;
@@ -252,6 +280,14 @@ function updateHud(dt, view) {
     $('dash').classList.toggle('charging', charging);
     $('dashBtn').style.setProperty('--fill', String(charging ? me.ch : 0));
     $('dashBtn').classList.toggle('cool', me.cd > 0);
+
+    const kind = me.flags & 16 ? 1 : me.flags & 32 ? 2 : 0;
+    $('power').hidden = !kind;
+    if (kind) {
+      $('power').style.setProperty('--c', POWERS[kind].color);
+      $('powerName').textContent = POWERS[kind].name;
+      $('powerBar').style.width = `${Math.min(100, (me.pw / (kind === 1 ? 6 : 8)) * 100)}%`;
+    }
   }
 
   hudTimer -= dt;
@@ -398,6 +434,7 @@ $('joinForm').addEventListener('submit', (e) => {
 const camTarget = new THREE.Vector3();
 const lookAt = new THREE.Vector3();
 let menuAngle = 0;
+let shake = 0;
 
 // Low three-quarter view so the horizon stays on screen; portrait screens pull back to keep the island in frame
 function updateCamera(dt, view) {
@@ -415,6 +452,11 @@ function updateCamera(dt, view) {
     lookAt.set(0, 1, 0);
   }
   camera.lookAt(lookAt);
+  if (shake > 0) {
+    camera.position.x += (Math.random() - 0.5) * shake;
+    camera.position.y += (Math.random() - 0.5) * shake;
+    shake = Math.max(0, shake - dt * 2.5);
+  }
 }
 
 // ==== loop ====
@@ -458,6 +500,7 @@ function frame(now) {
   }
 
   world.update(dt, view?.r ?? null, camera);
+  crates.sync(view?.crates ?? [], dt, t);
   fx.update(dt);
   pumpInput(dt);
   updateCamera(dt, view);

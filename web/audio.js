@@ -94,6 +94,13 @@ export const sfx = {
   fell() {
     tone(500, 120, 0.5, { type: 'triangle', vol: 0.3 });
   },
+  pickup() {
+    [659, 880, 1175].forEach((f, i) => tone(f, f, 0.14, { type: 'triangle', vol: 0.22, delay: i * 0.06 }));
+  },
+  pound(near) {
+    tone(150, 38, 0.4, { type: 'sine', vol: near ? 0.9 : 0.35 });
+    hiss(0.45, 1100, near ? 0.5 : 0.18);
+  },
   start() {
     [392, 523, 659, 784].forEach((f, i) => tone(f, f * 1.01, 0.16, { type: 'square', vol: 0.1, delay: i * 0.09 }));
   },
