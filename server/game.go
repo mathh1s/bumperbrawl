@@ -85,7 +85,9 @@ type Player struct {
 	LastHitBy int
 	LastHitT  float64
 
-	Score int
+	Score    int
+	Wins     int
+	MatchPts int
 
 	think      float64
 	botRelease float64
@@ -98,36 +100,40 @@ type Client struct {
 }
 
 type Game struct {
-	mu         sync.Mutex
-	players    map[int]*Player
-	clients    map[*Client]struct{}
-	nextID     int
-	now        float64
-	tick       int
-	phase      int
-	phaseT     float64
-	radius     float64
-	minPlayers int
-	events     []map[string]any
-	crates     []*Crate
-	crateT     float64
-	nextCrate  int
-	crownID    int
-	roundTime  float64
-	code       string
-	sweepA     float64
-	sweepDir   float64
-	sweepOn    bool
+	mu        sync.Mutex
+	players   map[int]*Player
+	clients   map[*Client]struct{}
+	nextID    int
+	now       float64
+	tick      int
+	phase     int
+	phaseT    float64
+	radius    float64
+	cfg       Config
+	events    []map[string]any
+	crates    []*Crate
+	crateT    float64
+	nextCrate int
+	crownID   int
+	code      string
+	roundNo   int
+	mode      int
+	modeOrder []int
+	sweepA    float64
+	sweepDir  float64
+	sweepOn   bool
 }
 
-func NewGame(code string, minPlayers int, roundTime float64) *Game {
+func NewGame(code string, cfg Config) *Game {
+	cfg.RoundTime = math.Max(minRoundTime, cfg.RoundTime)
+	cfg.MatchRounds = max(1, cfg.MatchRounds)
 	g := &Game{
-		code:       code,
-		players:    map[int]*Player{},
-		clients:    map[*Client]struct{}{},
-		minPlayers: minPlayers,
-		roundTime:  math.Max(minRoundTime, roundTime),
+		code:    code,
+		players: map[int]*Player{},
+		clients: map[*Client]struct{}{},
+		cfg:     cfg,
 	}
+	g.newMatch()
 	g.startRound()
 	return g
 }
@@ -135,8 +141,10 @@ func NewGame(code string, minPlayers int, roundTime float64) *Game {
 // ==== lifecycle ====
 
 func (g *Game) startRound() {
+	g.roundNo++
+	g.mode = g.modeOrder[g.roundNo-1]
 	g.phase = phasePlay
-	g.phaseT = g.roundTime
+	g.phaseT = g.cfg.RoundTime
 	g.radius = arenaMax
 	g.clearCrates()
 	g.resetSweeper()
@@ -144,26 +152,26 @@ func (g *Game) startRound() {
 		p.Score = 0
 		g.respawn(p)
 	}
-	g.events = append(g.events, map[string]any{"k": "start"})
+	g.events = append(g.events, map[string]any{"k": "start", "m": g.mode, "r": g.roundNo, "of": g.cfg.MatchRounds})
 }
 
 func (g *Game) endRound() {
 	g.phase = phaseEnd
-	g.phaseT = intermission
 	g.clearCrates()
-	var best *Player
-	tie := false
-	for _, p := range g.players {
-		switch {
-		case best == nil || p.Score > best.Score:
-			best, tie = p, false
-		case p.Score == best.Score:
-			tie = true
-		}
+	top := g.podium()
+	winners := g.awardRound()
+	ev := map[string]any{
+		"k": "end", "m": g.mode, "r": g.roundNo, "of": g.cfg.MatchRounds,
+		"w": names(winners), "s": 0, "top": top, "st": g.standings(), "mo": g.matchOver(),
 	}
-	ev := map[string]any{"k": "end", "w": "", "s": 0, "top": g.podium()}
-	if best != nil && best.Score > 0 && !tie {
-		ev["w"], ev["s"] = best.Name, best.Score
+	if len(winners) > 0 {
+		ev["s"] = winners[0].Score
+	}
+	g.phaseT = intermission
+	if g.matchOver() {
+		g.phaseT = matchIntermission
+		ev["ch"] = names(g.champions())
+		ev["top"] = g.matchPodium()
 	}
 	g.events = append(g.events, ev)
 }
@@ -172,11 +180,11 @@ func (g *Game) arenaRadius() float64 {
 	if g.phase == phaseEnd {
 		return arenaMin
 	}
-	elapsed := g.roundTime - g.phaseT
+	elapsed := g.cfg.RoundTime - g.phaseT
 	if elapsed < shrinkDelay {
 		return arenaMax
 	}
-	f := (elapsed - shrinkDelay) / (g.roundTime - shrinkDelay)
+	f := (elapsed - shrinkDelay) / (g.cfg.RoundTime - shrinkDelay)
 	return arenaMax - (arenaMax-arenaMin)*math.Min(f, 1)
 }
 
@@ -218,9 +226,13 @@ func (g *Game) step(dt float64) {
 	g.tick++
 	g.phaseT -= dt
 	if g.phaseT <= 0 {
-		if g.phase == phasePlay {
+		switch {
+		case g.phase == phasePlay:
 			g.endRound()
-		} else {
+		case g.matchOver():
+			g.newMatch()
+			g.startRound()
+		default:
 			g.startRound()
 		}
 	}
@@ -378,23 +390,30 @@ func (g *Game) knockOut(p *Player) {
 	p.Pow, p.PowT, p.PoundT = powNone, 0, 0
 	p.FallT = 0
 	p.VY = 3
-	killer := 0
-	ev := map[string]any{"k": "ko", "v": p.ID}
+	ev := map[string]any{"k": "ko", "v": p.ID, "a": 0}
+	var killer *Player
 	if p.LastHitBy != 0 && g.now-p.LastHitT < creditWindow {
 		if k, ok := g.players[p.LastHitBy]; ok && k != p {
-			killer = k.ID
-			if g.phase == phasePlay {
-				if p.ID == g.crownID {
-					k.Score += crownBounty
-					ev["cr"] = true
-				} else {
-					k.Score++
-				}
-			}
+			killer = k
+			ev["a"] = k.ID
 		}
 	}
-	ev["a"] = killer
+	if g.phase == phasePlay {
+		g.scoreKnockOut(p, killer, ev)
+	}
 	g.events = append(g.events, ev)
+}
+
+func (g *Game) scoreKnockOut(victim, killer *Player, ev map[string]any) {
+	if g.mode != modeBrawl || killer == nil {
+		return
+	}
+	if victim.ID == g.crownID {
+		killer.Score += crownBounty
+		ev["cr"] = true
+	} else {
+		killer.Score++
+	}
 }
 
 // ==== bots ====
@@ -410,7 +429,7 @@ func (g *Game) syncBots() {
 	}
 	want := 0
 	if humans > 0 {
-		want = max(0, g.minPlayers-humans)
+		want = max(0, g.cfg.MinPlayers-humans)
 	}
 	for len(bots) > want {
 		delete(g.players, bots[len(bots)-1].ID)
@@ -655,7 +674,7 @@ func (g *Game) rosterMsg() []byte {
 }
 
 func (g *Game) snapshot() []byte {
-	ps := make([][10]float64, 0, len(g.players))
+	ps := make([][11]float64, 0, len(g.players))
 	for _, p := range g.players {
 		flags := 0
 		if p.DashT > 0 {
@@ -683,14 +702,16 @@ func (g *Game) snapshot() []byte {
 		if p.DashCDMax > 0 {
 			cd = p.DashCD / p.DashCDMax
 		}
-		ps = append(ps, [10]float64{
+		ps = append(ps, [11]float64{
 			float64(p.ID), r2(p.X), r2(p.Z), r2(p.Y), r2(p.Angle),
 			float64(flags), r2(cd), float64(p.Score), r2(p.ChargeT / chargeMax), r2(p.PowT),
+			float64(p.Wins),
 		})
 	}
 	msg := map[string]any{
 		"t": "s", "now": r2(g.now), "r": r2(g.radius),
 		"ph": g.phase, "tl": r2(math.Max(0, g.phaseT)), "p": ps, "c": g.crateList(), "cw": g.crownID,
+		"md": g.mode, "rn": g.roundNo, "rm": g.cfg.MatchRounds,
 	}
 	if g.sweepOn {
 		msg["sw"] = [2]float64{r2(g.sweepA), r2(g.sweepHalf())}

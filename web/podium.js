@@ -81,10 +81,10 @@ export class Podium {
     this.blobs = [];
   }
 
-  show(top) {
+  show(top, suffix = '') {
     this.hide();
     top.slice(0, PLACES.length).forEach((e, i) => {
-      const b = new Blob({ name: `${e.n}  ${e.s}`, color: e.c, hat: e.h, ramp: this.ramp });
+      const b = new Blob({ name: `${e.n}  ${e.s}${suffix}`, color: e.c, hat: e.h, ramp: this.ramp });
       b.group.position.set(PLACES[i].x, PLACES[i].h, 0.1);
       if (i === 0) b.setCrown(true, this.ramp);
       this.scene.add(b.group);
@@ -115,7 +115,7 @@ export class Podium {
     const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2));
     const dist = Math.max(9.5, 4.4 / (halfH * aspect));
     this.camera.position.set(Math.sin(this.t * 0.25) * 1.2, 2.2 + dist * 0.13, dist);
-    this.camera.lookAt(0, 1.7, 0);
+    this.camera.lookAt(0, 2.3, 0);
 
     for (const e of this.blobs) {
       e.hopT -= dt;

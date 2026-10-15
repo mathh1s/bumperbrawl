@@ -6,6 +6,7 @@ import { Podium } from './podium.js';
 import { Sweeper } from './sweeper.js';
 import { FX } from './fx.js';
 import { Crates, POWERS } from './crates.js';
+import { modeOf } from './modes.js';
 import { Input } from './input.js';
 import { initAudio, sfx } from './audio.js';
 import { Music } from './music.js';
@@ -122,10 +123,10 @@ function onSnapshot(m) {
 
   const players = new Map();
   for (const a of m.p) {
-    players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0 });
+    players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0, wins: a[10] ?? 0 });
   }
   const t = m.now * 1000 + clockOffset;
-  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw };
+  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1 };
   snaps.push(snap);
   if (snaps.length > 60) snaps.shift();
   latest = snap;
@@ -250,22 +251,38 @@ function fireEvents(rt, view) {
       case 'cg':
         fx.dust(e.x, 0.4, e.z);
         break;
-      case 'start':
+      case 'start': {
         podium.hide();
-        if (joined) { banner('Brawl!', 1200); sfx.start(); }
-        break;
-      case 'end':
+        lastEnd = null;
+        $('standings').hidden = true;
+        document.body.classList.remove('standings');
+        const mode = modeOf(e.m);
         if (joined) {
-          const text = e.w ? `${esc(e.w)} wins!<small>${e.s} bonk${e.s === 1 ? '' : 's'}</small>` : 'Round over!<small>nobody takes it</small>';
-          if (e.top?.length) {
-            podium.show(e.top);
-            banner(text, 6500, 'high');
-          } else {
-            banner(text, 4000);
-          }
-          music.victory();
+          banner(`<small>Round ${e.r} of ${e.of}</small>${mode.name}<small>${mode.rule}</small>`, 3200);
+          sfx.start();
         }
         break;
+      }
+      case 'end': {
+        lastEnd = e;
+        if (!joined) break;
+        const mode = modeOf(e.m);
+        let text;
+        if (e.mo) {
+          text = e.ch ? `${esc(e.ch)} ${verb(e.ch)} the match!<small>most rounds won</small>` : 'Match over!<small>nobody won a round</small>';
+        } else {
+          text = e.w ? `${esc(e.w)} ${verb(e.w)} round ${e.r}!<small>${mode.unit(e.s)}</small>` : `Round ${e.r} over!<small>nobody scored</small>`;
+        }
+        if (e.top?.length) {
+          podium.show(e.top, e.mo ? '★' : '');
+          banner(text, e.mo ? 9000 : 6500, 'high');
+        } else {
+          banner(text, 4000);
+        }
+        showStandings(e.st ?? [], e.mo);
+        music.victory();
+        break;
+      }
     }
   }
 }
@@ -304,6 +321,22 @@ function addFeed(html) {
   setTimeout(() => li.remove(), 4600);
 }
 
+let lastEnd = null;
+
+// the server joins co-winners with an ampersand
+const verb = (who) => (who.includes(' & ') ? 'win' : 'wins');
+
+function showStandings(list, final) {
+  const el = $('standings');
+  el.hidden = !list.some((p) => p.w > 0);
+  document.body.classList.toggle('standings', !el.hidden);
+  el.querySelector('h3').textContent = final ? 'Final standings' : 'Match standings';
+  el.querySelector('ol').innerHTML = list.slice(0, 6).map((p) =>
+    `<li class="${p.i === myId ? 'me' : ''}"><span class="dot" style="background:${PALETTE[p.c]}"></span>`
+    + `<span class="nm">${esc(p.n)}</span><span class="stars">${'★'.repeat(Math.min(p.w, 5))}${p.w > 5 ? `×${p.w}` : ''}</span></li>`,
+  ).join('');
+}
+
 const CROWN_SVG = '<svg class="crown" viewBox="0 0 24 18"><path d="M2 16h20l1-11-6 4-5-8-5 8-6-4z"/></svg>';
 
 let hudTimer = 0;
@@ -334,19 +367,23 @@ function updateHud(dt, view) {
   const tl = Math.ceil(latest.tl);
   $('time').textContent = `${Math.floor(tl / 60)}:${String(tl % 60).padStart(2, '0')}`;
   const crumbling = latest.ph === 0 && view && view.r < ARENA_MAX - 0.01;
-  $('phase').textContent = latest.ph === 1 ? 'Next round' : crumbling ? 'Island crumbling' : 'Round';
+  $('phase').textContent = latest.ph === 1
+    ? (lastEnd?.mo ? 'New match in' : 'Next round')
+    : `Round ${latest.rn}/${latest.rm} · ${modeOf(latest.md).name}`;
   $('timer').classList.toggle('crumble', !!crumbling);
 
   const rows = [...latest.players.entries()]
     .filter(([id]) => roster.has(id))
-    .sort((a, b) => b[1].score - a[1].score)
+    .sort((a, b) => b[1].score - a[1].score || b[1].wins - a[1].wins)
     .slice(0, 8);
   const roomRow = ROOM ? `<li class="room" data-invite>Room <b>${ROOM}</b> · invite</li>` : '';
   $('board').innerHTML = roomRow + rows.map(([id, p]) => {
     const r = roster.get(id);
     const crown = id === latest.cw ? CROWN_SVG : '';
+    const wins = p.wins ? `<span class="wins">★${p.wins}</span>` : '';
     return `<li class="${id === myId ? 'me' : ''}"><span class="dot" style="background:${PALETTE[r.c]}"></span>`
-      + `<span class="nm">${esc(r.n)}</span>${crown}${r.b ? '<span class="bot">bot</span>' : ''}<span class="sc">${p.score}</span></li>`;
+      + `<span class="nm">${esc(r.n)}</span>${crown}${r.b ? '<span class="bot">bot</span>' : ''}${wins}`
+      + `<span class="sc">${modeOf(latest.md).cell(p)}</span></li>`;
   }).join('');
 }
 
@@ -588,7 +625,11 @@ function frame(now) {
       b.group.visible = view.players.has(id);
       b.setCrown(id === view.cw, ramp);
     }
-    if (view.ph === 0 && podium.active) podium.hide();
+    if (view.ph === 0 && (podium.active || !$('standings').hidden)) {
+      podium.hide();
+      $('standings').hidden = true;
+      document.body.classList.remove('standings');
+    }
   }
 
   world.update(dt, view?.r ?? null, camera);

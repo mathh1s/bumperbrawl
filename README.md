@@ -1,6 +1,6 @@
 # Bumper Brawl
 
-A small online 3D party brawler. Everyone is a squishy blob on a floating hex island. Bump and dash into other players to knock them into the sea. After 15 seconds the island starts crumbling from the edges, so the arena gets tighter until the round ends. Most bonks wins.
+A small online 3D party brawler. Everyone is a squishy blob on a floating hex island. Bump and dash into other players to knock them into the sea. After 15 seconds the island starts crumbling from the edges, so the arena gets tighter until the round ends. A match is several rounds of different modes, and whoever wins the most rounds wins the match.
 
 - Server: Go, authoritative physics at 60 Hz, state broadcast at 20 Hz over WebSockets
 - Client: Three.js (vendored, no CDN), toon-shaded low-poly look, snapshot interpolation
@@ -37,6 +37,7 @@ Then open http://localhost:8080. `PORT` changes the listen port.
 | `PORT`            | 8080    | Listen port inside the container / process                     |
 | `MIN_PLAYERS`     | 4       | Bots fill up to this many players (0 = no bots)                |
 | `ROUND_SECONDS`   | 120     | Round length, at least 30                                      |
+| `MATCH_ROUNDS`    | 5       | Rounds per match                                               |
 | `ALLOWED_ORIGINS` | empty   | Extra allowed WebSocket origins; same-origin always works      |
 | `WEB_DIR`         | auto    | Static files directory                                         |
 

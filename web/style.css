@@ -223,6 +223,26 @@ kbd {
 #board .crown { width: 16px; height: 12px; flex: none; fill: var(--gold); stroke: var(--ink); stroke-width: 2; stroke-linejoin: round; }
 #feed .bounty { color: #e8590c; font-weight: 700; }
 #banner.high { top: 9%; }
+#board .wins { font-size: 11px; font-weight: 700; color: #e8a400; -webkit-text-stroke: 0.4px var(--ink); }
+
+#standings {
+  position: absolute; left: 50%; bottom: 18px;
+  transform: translateX(-50%);
+  min-width: 220px;
+  padding: 8px 14px 10px;
+  background: rgba(255, 250, 240, 0.94);
+  border: 3px solid var(--ink);
+  border-radius: 16px;
+  box-shadow: 0 4px 0 var(--ink);
+}
+#standings h3 { margin: 0 0 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; opacity: 0.7; text-align: center; }
+#standings ol { list-style: none; margin: 0; padding: 0; font-size: 15px; }
+#standings li { display: flex; align-items: center; gap: 8px; padding: 1px 0; }
+#standings .dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--ink); flex: none; }
+#standings .nm { flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#standings li.me .nm { font-weight: 700; color: var(--accent); }
+body.standings #touch, body.standings #dash, body.standings #power { display: none; }
+#standings .stars { color: #e8a400; font-weight: 700; letter-spacing: 1px; -webkit-text-stroke: 0.5px var(--ink); }
 body.podium #touch, body.podium #dash, body.podium #power, body.podium #feed { display: none; }
 
 #feed {

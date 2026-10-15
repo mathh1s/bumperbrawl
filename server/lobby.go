@@ -32,21 +32,20 @@ type room struct {
 // Joining and reaping both hold the lobby lock, so a room is never torn
 // down between being looked up and gaining its first client.
 type Lobby struct {
-	mu         sync.Mutex
-	rooms      map[string]*room
-	minPlayers int
-	roundTime  float64
+	mu    sync.Mutex
+	rooms map[string]*room
+	cfg   Config
 }
 
-func NewLobby(minPlayers int, roundTime float64) *Lobby {
-	l := &Lobby{rooms: map[string]*room{}, minPlayers: minPlayers, roundTime: roundTime}
+func NewLobby(cfg Config) *Lobby {
+	l := &Lobby{rooms: map[string]*room{}, cfg: cfg}
 	l.rooms[""] = l.start("")
 	go l.reap()
 	return l
 }
 
 func (l *Lobby) start(code string) *room {
-	r := &room{game: NewGame(code, l.minPlayers, l.roundTime), stop: make(chan struct{})}
+	r := &room{game: NewGame(code, l.cfg), stop: make(chan struct{})}
 	go r.game.run(r.stop)
 	return r
 }

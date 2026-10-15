@@ -5,8 +5,12 @@ import (
 	"testing"
 )
 
+var testCfg = Config{MinPlayers: 0, RoundTime: 120, MatchRounds: 3}
+
+func testGame() *Game { return NewGame("", testCfg) }
+
 func newTestLobby() *Lobby {
-	return &Lobby{rooms: map[string]*room{}, minPlayers: 0, roundTime: 120}
+	return &Lobby{rooms: map[string]*room{}, cfg: testCfg}
 }
 
 func TestNormalizeCode(t *testing.T) {
@@ -55,7 +59,7 @@ func TestRoomsAreIsolatedAndReaped(t *testing.T) {
 func TestRoomLimit(t *testing.T) {
 	l := newTestLobby()
 	for i := 0; i < maxRooms; i++ {
-		l.rooms[string(rune('a'+i%26))+string(rune('a'+i/26))] = &room{game: NewGame("", 0, 120), stop: make(chan struct{})}
+		l.rooms[string(rune('a'+i%26))+string(rune('a'+i/26))] = &room{game: testGame(), stop: make(chan struct{})}
 	}
 	if _, err := l.join("NEWONE", &Client{send: make(chan []byte, 64)}); err != errTooManyRooms {
 		t.Fatalf("expected room limit error, got %v", err)
@@ -63,7 +67,7 @@ func TestRoomLimit(t *testing.T) {
 }
 
 func TestCrownGoesToSoleLeaderAndStaysOnTie(t *testing.T) {
-	g := NewGame("", 0, 120)
+	g := testGame()
 	a := g.newPlayer("a", 0, 0, false)
 	b := g.newPlayer("b", 0, 0, false)
 
@@ -89,7 +93,7 @@ func TestCrownGoesToSoleLeaderAndStaysOnTie(t *testing.T) {
 }
 
 func TestCrownBounty(t *testing.T) {
-	g := NewGame("", 0, 120)
+	g := testGame()
 	king := g.newPlayer("king", 0, 0, false)
 	hunter := g.newPlayer("hunter", 0, 0, false)
 	king.Score = 3
@@ -103,7 +107,7 @@ func TestCrownBounty(t *testing.T) {
 }
 
 func TestPodiumOrder(t *testing.T) {
-	g := NewGame("", 0, 120)
+	g := testGame()
 	for i, s := range []int{1, 5, 0, 3, 5} {
 		g.newPlayer(string(rune('a'+i)), 0, 0, false).Score = s
 	}
@@ -121,7 +125,7 @@ func TestPodiumOrder(t *testing.T) {
 
 func TestChargedDashGoesFurther(t *testing.T) {
 	travel := func(charge float64) float64 {
-		g := NewGame("", 0, 120)
+		g := testGame()
 		p := g.newPlayer("p", 0, 0, false)
 		p.X, p.Z, p.Ghost, p.Angle = 0, 0, 0, 0
 		if charge > 0 {
@@ -141,7 +145,7 @@ func TestChargedDashGoesFurther(t *testing.T) {
 
 func sweepGame(t *testing.T) (*Game, *Player) {
 	t.Helper()
-	g := NewGame("", 0, 120)
+	g := testGame()
 	g.phaseT = 20
 	g.sweepDir = 1
 	g.sweepA = -0.05
@@ -191,5 +195,85 @@ func TestHeavyResistsLog(t *testing.T) {
 	g2.updateSweeper(4.0 / tickRate)
 	if heavy := math.Hypot(h.VX, h.VZ); heavy >= light {
 		t.Fatalf("heavy %.2f should be pushed less than light %.2f", heavy, light)
+	}
+}
+
+// finishRound runs the clock out on the current round.
+func finishRound(g *Game) {
+	g.phaseT = 0
+	g.step(1.0 / tickRate)
+}
+
+func lastEvent(g *Game, kind string) map[string]any {
+	for i := len(g.events) - 1; i >= 0; i-- {
+		if g.events[i]["k"] == kind {
+			return g.events[i]
+		}
+	}
+	return nil
+}
+
+func TestRoundWinsAndMatchChampion(t *testing.T) {
+	g := testGame()
+	a := g.newPlayer("a", 0, 0, false)
+	b := g.newPlayer("b", 0, 0, false)
+
+	a.Score, b.Score = 3, 1
+	finishRound(g)
+	if a.Wins != 1 || b.Wins != 0 {
+		t.Fatalf("round 1 wins a=%d b=%d", a.Wins, b.Wins)
+	}
+	if ev := lastEvent(g, "end"); ev["w"] != "a" || ev["mo"] != false {
+		t.Fatalf("round 1 end event %v", ev)
+	}
+
+	finishRound(g) // intermission over, round 2 starts with fresh scores
+	if g.roundNo != 2 || a.Score != 0 {
+		t.Fatalf("round 2 should start clean, round=%d score=%d", g.roundNo, a.Score)
+	}
+	a.Score, b.Score = 2, 2
+	finishRound(g)
+	if a.Wins != 2 || b.Wins != 1 {
+		t.Fatalf("a tie gives both a win, a=%d b=%d", a.Wins, b.Wins)
+	}
+
+	finishRound(g)
+	b.Score = 5
+	finishRound(g)
+	ev := lastEvent(g, "end")
+	if ev["mo"] != true {
+		t.Fatal("third round of a three round match ends the match")
+	}
+	// 2 wins each; b has more points over the match (1+2+5 vs 3+2+0)
+	if ev["ch"] != "b" {
+		t.Fatalf("champion should be b on match points, got %v", ev["ch"])
+	}
+
+	finishRound(g)
+	if g.roundNo != 1 || a.Wins != 0 || b.Wins != 0 {
+		t.Fatalf("a new match starts at round 1 with no wins, round=%d", g.roundNo)
+	}
+}
+
+func TestScorelessRoundHasNoWinner(t *testing.T) {
+	g := testGame()
+	a := g.newPlayer("a", 0, 0, false)
+	finishRound(g)
+	if a.Wins != 0 || lastEvent(g, "end")["w"] != "" {
+		t.Fatal("nobody wins a round where nobody scored")
+	}
+}
+
+func TestModeOrderCoversEveryMode(t *testing.T) {
+	g := NewGame("", Config{RoundTime: 120, MatchRounds: len(allModes) + 1})
+	seen := map[int]bool{}
+	for i, m := range g.modeOrder {
+		seen[m] = true
+		if i > 0 && len(allModes) > 1 && m == g.modeOrder[i-1] {
+			t.Fatalf("mode %d repeats back to back in %v", m, g.modeOrder)
+		}
+	}
+	if len(seen) != len(allModes) {
+		t.Fatalf("every mode should appear, order %v", g.modeOrder)
 	}
 }

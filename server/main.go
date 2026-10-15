@@ -20,6 +20,10 @@ func main() {
 	if err != nil {
 		roundSeconds = 120
 	}
+	matchRounds, err := strconv.Atoi(env("MATCH_ROUNDS", strconv.Itoa(defaultMatchRounds)))
+	if err != nil {
+		matchRounds = defaultMatchRounds
+	}
 	webDir := env("WEB_DIR", "")
 	if webDir == "" {
 		webDir = "../web"
@@ -32,7 +36,7 @@ func main() {
 		origins = strings.Split(o, ",")
 	}
 
-	lobby := NewLobby(minPlayers, roundSeconds)
+	lobby := NewLobby(Config{MinPlayers: minPlayers, RoundTime: roundSeconds, MatchRounds: matchRounds})
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir(webDir)))
