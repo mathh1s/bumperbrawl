@@ -2,21 +2,41 @@ const DASH_KEYS = new Set(['Space', 'ShiftLeft', 'ShiftRight', 'KeyJ']);
 const STICK_RANGE = 55;
 
 export class Input {
-  constructor(onDash) {
+  constructor({ onDashDown, onDashUp }) {
     this.keys = new Set();
     this.touch = { x: 0, z: 0 };
-    this.onDash = onDash;
+    this.onDashDown = onDashDown;
+    this.onDashUp = onDashUp;
+    this.dashHeld = false;
 
     addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement) return;
       if (DASH_KEYS.has(e.code)) {
         e.preventDefault();
-        if (!e.repeat) this.onDash();
+        if (!e.repeat) this.pressDash();
       }
       this.keys.add(e.code);
     });
-    addEventListener('keyup', (e) => this.keys.delete(e.code));
-    addEventListener('blur', () => this.keys.clear());
+    addEventListener('keyup', (e) => {
+      this.keys.delete(e.code);
+      if (DASH_KEYS.has(e.code) && ![...DASH_KEYS].some((k) => this.keys.has(k))) this.releaseDash();
+    });
+    addEventListener('blur', () => {
+      this.keys.clear();
+      this.releaseDash();
+    });
+  }
+
+  pressDash() {
+    if (this.dashHeld) return;
+    this.dashHeld = true;
+    this.onDashDown();
+  }
+
+  releaseDash() {
+    if (!this.dashHeld) return;
+    this.dashHeld = false;
+    this.onDashUp();
   }
 
   vector() {
@@ -76,7 +96,9 @@ export class Input {
 
     dashBtn.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      this.onDash();
+      dashBtn.setPointerCapture(e.pointerId);
+      this.pressDash();
     });
+    for (const type of ['pointerup', 'pointercancel']) dashBtn.addEventListener(type, () => this.releaseDash());
   }
 }

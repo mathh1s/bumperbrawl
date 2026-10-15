@@ -109,7 +109,7 @@ function onSnapshot(m) {
 
   const players = new Map();
   for (const a of m.p) {
-    players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7] });
+    players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0 });
   }
   const t = m.now * 1000 + clockOffset;
   const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players };
@@ -150,6 +150,7 @@ function sample(rt) {
       flags: k < 0.5 ? pa.flags : pb.flags,
       cd: pb.cd,
       score: pb.score,
+      ch: pa.ch + (pb.ch - pa.ch) * k,
     });
   }
   return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players };
@@ -245,9 +246,12 @@ function updateHud(dt, view) {
   if (!joined || !latest) return;
   const me = latest.players.get(myId);
   if (me) {
-    const ring = $('dashRing');
-    ring.style.strokeDashoffset = String(119.4 * me.cd);
-    $('dash').classList.toggle('ready', me.cd === 0);
+    const charging = (me.flags & 8) !== 0;
+    $('dashRing').style.strokeDashoffset = String(119.4 * (charging ? 1 - me.ch : me.cd));
+    $('dash').classList.toggle('ready', me.cd === 0 && !charging);
+    $('dash').classList.toggle('charging', charging);
+    $('dashBtn').style.setProperty('--fill', String(charging ? me.ch : 0));
+    $('dashBtn').classList.toggle('cool', me.cd > 0);
   }
 
   hudTimer -= dt;
@@ -273,15 +277,28 @@ function updateHud(dt, view) {
 
 // ==== input ====
 
-const input = new Input(() => {
-  if (!joined) return;
+function dashReady() {
   const me = latest?.players.get(myId);
-  if (me && me.cd === 0 && !(me.flags & 4)) {
-    sfx.dash();
-    const b = blobs.get(myId);
-    if (b) fx.puff(b.group.position.x, b.group.position.z);
-  }
-  send({ t: 'dash' });
+  return me && me.cd === 0 && !(me.flags & 4) ? me : null;
+}
+
+const input = new Input({
+  onDashDown() {
+    if (!joined) return;
+    if (dashReady()) sfx.chargeStart();
+    send({ t: 'charge' });
+  },
+  onDashUp() {
+    if (!joined) return;
+    sfx.chargeStop();
+    const me = dashReady();
+    if (me) {
+      sfx.dash(me.flags & 8 ? me.ch : 0);
+      const b = blobs.get(myId);
+      if (b) fx.puff(b.group.position.x, b.group.position.z);
+    }
+    send({ t: 'dash' });
+  },
 });
 if (isTouch) input.bindTouch({ pad: $('pad'), stick: $('stick'), knob: $('knob'), dashBtn: $('dashBtn'), canvas });
 
@@ -424,6 +441,10 @@ function frame(now) {
         b = new Blob({ name: info.n, color: info.c, hat: info.h, me: id === myId, ramp });
         blobs.set(id, b);
         scene.add(b.group);
+      }
+      if (s.flags & 8 && s.ch > 0.95 && Math.random() < dt * 14) {
+        const a = Math.random() * Math.PI * 2;
+        fx.burst(s.x + Math.sin(a) * 0.9, 0.4 + Math.random(), s.z + Math.cos(a) * 0.9, { colors: ['#ffd43b', '#fff6c4'], n: 2, speed: 0.6, up: 2, size: 0.09, life: 0.4, gravity: 2 });
       }
       if (b.update(s, dt, t) === 'splash') {
         fx.splash(s.x, s.z, 1.2);

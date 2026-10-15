@@ -19,6 +19,8 @@ const (
 	dashCooldown = 1.1
 	dashTime     = 0.28
 	dashMass     = 2.6
+	chargeMax    = 0.9
+	chargeSlow   = 0.35
 	restitution  = 1.25
 	bumpKick     = 2.5
 	fallGravity  = 30.0
@@ -41,9 +43,10 @@ const (
 )
 
 const (
-	flagDash  = 1
-	flagGhost = 2
-	flagFall  = 4
+	flagDash   = 1
+	flagGhost  = 2
+	flagFall   = 4
+	flagCharge = 8
 )
 
 var botNames = []string{"Bonk", "Wobbles", "Sir Bump", "Jellybean", "Puddin", "Mochi", "Gloop", "Tofu"}
@@ -62,18 +65,23 @@ type Player struct {
 	InX, InZ float64
 	WantDash bool
 
-	DashCD  float64
-	DashT   float64
-	Ghost   float64
-	Falling bool
-	FallT   float64
+	DashCD    float64
+	DashT     float64
+	DashPow   float64
+	DashCDMax float64
+	Charging  bool
+	ChargeT   float64
+	Ghost     float64
+	Falling   bool
+	FallT     float64
 
 	LastHitBy int
 	LastHitT  float64
 
 	Score int
 
-	think float64
+	think      float64
+	botRelease float64
 }
 
 type Client struct {
@@ -175,6 +183,7 @@ func (g *Game) respawn(p *Player) {
 	p.Falling, p.FallT = false, 0
 	p.Ghost = ghostTime
 	p.DashCD, p.DashT = 0, 0
+	p.Charging, p.ChargeT = false, 0
 	p.LastHitBy = 0
 	p.Angle = math.Atan2(-p.X, -p.Z)
 }
@@ -218,14 +227,28 @@ func (g *Game) step(dt float64) {
 		if inLen > 0.1 {
 			p.Angle = math.Atan2(p.InX, p.InZ)
 		}
-		p.VX += p.InX * accel * dt
-		p.VZ += p.InZ * accel * dt
+		acc := accel
+		if p.Charging {
+			p.ChargeT = math.Min(chargeMax, p.ChargeT+dt)
+			acc *= chargeSlow
+		}
+		p.VX += p.InX * acc * dt
+		p.VZ += p.InZ * acc * dt
 
 		if p.WantDash && p.DashCD == 0 {
-			p.VX += math.Sin(p.Angle) * dashImpulse
-			p.VZ += math.Cos(p.Angle) * dashImpulse
-			p.DashCD = dashCooldown
-			p.DashT = dashTime
+			// a tap is a plain dash; holding trades mobility for a longer, heavier launch
+			pow := 0.0
+			if p.Charging {
+				pow = p.ChargeT / chargeMax
+			}
+			imp := dashImpulse * (1 + 0.9*pow)
+			p.VX += math.Sin(p.Angle) * imp
+			p.VZ += math.Cos(p.Angle) * imp
+			p.DashCD = dashCooldown + 0.6*pow
+			p.DashCDMax = p.DashCD
+			p.DashT = dashTime * (1 + 0.6*pow)
+			p.DashPow = pow
+			p.Charging, p.ChargeT = false, 0
 			p.Ghost = 0
 		}
 		p.WantDash = false
@@ -248,7 +271,7 @@ func (g *Game) step(dt float64) {
 
 func (p *Player) mass() float64 {
 	if p.DashT > 0 {
-		return dashMass
+		return dashMass * (1 + 0.7*p.DashPow)
 	}
 	return 1
 }
@@ -304,6 +327,7 @@ func (g *Game) collide() {
 
 func (g *Game) knockOut(p *Player) {
 	p.Falling = true
+	p.Charging = false
 	p.FallT = 0
 	p.VY = 3
 	killer := 0
@@ -361,6 +385,12 @@ func (g *Game) thinkBots(dt float64) {
 		if !b.Bot || b.Falling {
 			continue
 		}
+		if b.Charging {
+			b.botRelease -= dt
+			if b.botRelease <= 0 {
+				b.WantDash = true
+			}
+		}
 		b.think -= dt
 		if b.think > 0 {
 			continue
@@ -397,8 +427,15 @@ func (g *Game) thinkBots(dt float64) {
 			b.InX, b.InZ = dx/l, dz/l
 		}
 
-		if target != nil && best < 3.4 && edgeDanger < -1 && rand.Float64() < 0.25 {
+		if b.Charging || b.DashCD > 0 || target == nil || edgeDanger >= -1 {
+			continue
+		}
+		switch {
+		case best < 3.4 && rand.Float64() < 0.25:
 			b.WantDash = true
+		case best < 6 && rand.Float64() < 0.12:
+			b.Charging, b.ChargeT = true, 0
+			b.botRelease = 0.3 + rand.Float64()*0.6
 		}
 	}
 }
@@ -488,6 +525,10 @@ func (g *Game) handle(c *Client, m inMsg) {
 			x, z = x/l, z/l
 		}
 		c.player.InX, c.player.InZ = x, z
+	case "charge":
+		if p := c.player; p != nil && !p.Falling && p.DashCD == 0 && !p.Charging {
+			p.Charging, p.ChargeT = true, 0
+		}
 	case "dash":
 		if c.player != nil {
 			c.player.WantDash = true
@@ -540,7 +581,7 @@ func (g *Game) rosterMsg() []byte {
 }
 
 func (g *Game) snapshot() []byte {
-	ps := make([][8]float64, 0, len(g.players))
+	ps := make([][9]float64, 0, len(g.players))
 	for _, p := range g.players {
 		flags := 0
 		if p.DashT > 0 {
@@ -552,9 +593,16 @@ func (g *Game) snapshot() []byte {
 		if p.Falling {
 			flags |= flagFall
 		}
-		ps = append(ps, [8]float64{
+		if p.Charging {
+			flags |= flagCharge
+		}
+		cd := 0.0
+		if p.DashCDMax > 0 {
+			cd = p.DashCD / p.DashCDMax
+		}
+		ps = append(ps, [9]float64{
 			float64(p.ID), r2(p.X), r2(p.Z), r2(p.Y), r2(p.Angle),
-			float64(flags), r2(p.DashCD / dashCooldown), float64(p.Score),
+			float64(flags), r2(cd), float64(p.Score), r2(p.ChargeT / chargeMax),
 		})
 	}
 	msg := map[string]any{

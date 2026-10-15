@@ -233,6 +233,10 @@ kbd {
 #dash .track { stroke: rgba(45, 36, 64, 0.35); fill: rgba(255, 250, 240, 0.85); }
 #dash .fill { stroke: var(--accent); stroke-linecap: round; stroke-dasharray: 119.4; transition: stroke 0.15s; }
 #dash.ready .fill { stroke: var(--gold); }
+#dash.charging .fill { stroke: #ff922b; transition: none; }
+#dash.charging { animation: shake 0.08s infinite; }
+
+@keyframes shake { 50% { transform: translateX(calc(-50% + 1.5px)); } }
 #dash span { position: relative; font-size: 12px; font-weight: 700; text-transform: uppercase; }
 
 #musicBtn {
@@ -285,6 +289,8 @@ body.touch #musicBtn { right: auto; left: 50%; margin-left: -22px; bottom: 28px;
   -webkit-text-stroke: 1px var(--ink);
 }
 #dashBtn:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--ink); }
+#dashBtn { background: conic-gradient(var(--gold) calc(var(--fill, 0) * 1turn), var(--accent) 0); }
+#dashBtn.cool { filter: saturate(0.3) brightness(0.9); }
 body.touch #dash { display: none; }
 
 @media (max-width: 640px) {

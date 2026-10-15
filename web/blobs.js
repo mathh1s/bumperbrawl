@@ -236,6 +236,7 @@ export class Blob {
     this.prev = null;
     this.ghost = false;
     this.wasDashing = false;
+    this.lastCharge = 0;
     this.hitT = 0;
     this.blinkT = 2 + Math.random() * 3;
     // jelly spring: positive squashes, negative stretches
@@ -283,10 +284,15 @@ export class Blob {
     const falling = (s.flags & 4) !== 0;
     const dashing = (s.flags & 1) !== 0;
     const ghost = (s.flags & 2) !== 0;
-    if (dashing && !this.wasDashing) this.jellyV -= 6;
+    const charge = s.flags & 8 ? s.ch : 0;
+    if (dashing && !this.wasDashing) this.jellyV -= 6 + this.lastCharge * 8;
     this.wasDashing = dashing;
+    this.lastCharge = charge || (dashing ? this.lastCharge : 0);
 
-    this.group.position.set(s.x, Math.max(s.y, -30), s.z);
+    // squat, tremble and glow while charging so everyone can see a big hit coming
+    const tremble = Math.sin(t * 70) * 0.035 * charge;
+    this.group.position.set(s.x + tremble, Math.max(s.y, -30), s.z);
+    this.mat.emissive.copy(this.mat.color).multiplyScalar(0.45 * charge);
     this.group.rotation.y = s.a;
 
     this.jellyV += (-260 * this.jelly - 10 * this.jellyV) * dt;
@@ -294,6 +300,7 @@ export class Blob {
     const j = THREE.MathUtils.clamp(this.jelly, -0.35, 0.4);
     let sx = 1 + j * 0.45, sy = 1 - j, sz = 1 + j * 0.45;
     if (dashing) { sx *= 0.86; sy *= 0.88; sz *= 1.25; }
+    sx *= 1 + 0.12 * charge; sy *= 1 - 0.22 * charge; sz *= 1 + 0.12 * charge;
     this.pivot.scale.set(sx, sy, sz);
 
     const move = Math.min(this.speed / 7, 1);
@@ -314,7 +321,7 @@ export class Blob {
     }
 
     if (this.hat.userData.spinner) this.hat.userData.spinner.rotation.y += dt * (8 + this.speed * 3);
-    this.setExpression(t, dt, falling, dashing);
+    this.setExpression(t, dt, falling, dashing || charge > 0);
 
     if (ghost !== this.ghost) {
       this.ghost = ghost;
