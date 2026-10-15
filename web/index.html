@@ -7,7 +7,7 @@
   <title>Bumper Brawl</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&family=Lilita+One&display=swap">
   <link rel="stylesheet" href="style.css">
   <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
 </head>
@@ -41,42 +41,61 @@
   </div>
 
   <div id="menu">
-    <form class="card" id="joinForm">
-      <h1>Bumper<br>Brawl</h1>
-      <p class="tag">Bonk everyone off the island before it crumbles.</p>
-      <canvas id="preview"></canvas>
-      <div class="hatpick">
-        <button type="button" id="hatPrev" aria-label="Previous hat">‹</button>
-        <span id="hatName">Sprout</span>
-        <button type="button" id="hatNext" aria-label="Next hat">›</button>
+    <form id="joinForm" class="title">
+      <div class="brand">
+        <h1 class="wordmark" aria-label="Bumper Brawl">
+          <span class="w1">Bumper</span><span class="w2">Brawl</span>
+        </h1>
+        <p class="tagline">Bonk everyone off the island before it crumbles.</p>
       </div>
-      <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false">
-      <div id="colors"></div>
-      <div id="roomInfo" hidden>
-        <div class="roomHead">
-          <span>Room <b id="roomCode"></b></span>
-          <button type="button" id="inviteBtn" class="ghost small">Invite</button>
+
+      <section class="stage" aria-label="Your blob">
+        <canvas id="preview" aria-hidden="true"></canvas>
+        <div class="hatpick">
+          <button type="button" id="hatPrev" aria-label="Previous hat">‹</button>
+          <span id="hatName">Sprout</span>
+          <button type="button" id="hatNext" aria-label="Next hat">›</button>
         </div>
-      </div>
-      <button id="play" type="submit">Play</button>
-      <p class="who" id="who"></p>
-      <div class="rooms" id="publicRooms">
-        <div class="divider"><span>or play with friends</span></div>
-        <button type="button" id="friendsBtn" class="ghost">Create a room</button>
-        <div class="codeRow">
-          <input id="codeInput" maxlength="40" placeholder="Room code" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
-          <button type="button" id="codeBtn" class="ghost">Join</button>
+        <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false" aria-label="Your name">
+        <div id="colors" role="group" aria-label="Colour"></div>
+      </section>
+
+      <section class="actions">
+        <div id="roomInfo" class="tile room" hidden>
+          <p class="lead">You're invited to room</p>
+          <div id="roomCode" class="code" aria-live="polite"></div>
+          <button type="button" id="inviteBtn" class="chip">Invite</button>
         </div>
-      </div>
-      <details id="ranks">
-        <summary>Leaderboard <span id="myRank"></span></summary>
-        <p class="note">Public matches are rated. Your rating lives in this browser, no account needed.</p>
-        <ol id="rankList"></ol>
-      </details>
-      <a class="leave" id="leaveRoom" href="/" hidden>Leave room</a>
-      <p class="keys"><kbd>WASD</kbd> move &nbsp;·&nbsp; <kbd>Shift</kbd> dash, hold to charge &nbsp;·&nbsp; <kbd>Space</kbd> jump</p>
-      <p id="status">Connecting…</p>
+
+        <button id="play" type="submit" class="tile go">
+          <span class="big">Play now</span>
+          <span class="who" id="who">Connecting…</span>
+        </button>
+
+        <div class="tile friends" id="publicRooms">
+          <span class="big">Play with friends</span>
+          <button type="button" id="friendsBtn" class="chip">Create a room</button>
+          <div class="codeRow">
+            <input id="codeInput" maxlength="40" placeholder="Room code" autocomplete="off" autocapitalize="characters" spellcheck="false" aria-label="Room code">
+            <button type="button" id="codeBtn" class="chip">Join</button>
+          </div>
+        </div>
+
+        <a class="leave" id="leaveRoom" href="/" hidden>Leave room</a>
+        <p id="status" role="status"></p>
+      </section>
+
+      <footer class="menubar">
+        <button type="button" id="ranksBtn" class="chip">Leaderboard <span id="myRank"></span></button>
+        <p class="keys"><kbd>WASD</kbd> move <kbd>Shift</kbd> dash, hold to charge <kbd>Space</kbd> jump</p>
+      </footer>
     </form>
+
+    <aside id="ranks" hidden aria-label="Leaderboard">
+      <header><h2>Top blobs</h2><button type="button" id="ranksClose" class="chip" aria-label="Close leaderboard">✕</button></header>
+      <p class="note">Public matches are rated. Your rating is kept in this browser, so there's no account to make.</p>
+      <ol id="rankList"></ol>
+    </aside>
   </div>
 
   <script type="module" src="main.js"></script>

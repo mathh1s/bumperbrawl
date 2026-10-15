@@ -673,11 +673,12 @@ function flashInvite(text) {
 
 if (ROOM) {
   $('publicRooms').hidden = true;
-  $('ranks').hidden = true;
+  $('ranksBtn').hidden = true;
   $('roomInfo').hidden = false;
   $('leaveRoom').hidden = false;
-  $('roomCode').textContent = ROOM;
-  $('play').textContent = 'Join room';
+  $('roomCode').innerHTML = [...ROOM].map((c) => `<span>${c}</span>`).join('');
+  $('roomCode').setAttribute('aria-label', ROOM);
+  $('play').querySelector('.big').textContent = 'Join room';
 }
 // desktop browsers without a share sheet just copy the link
 if (!navigator.share) $('inviteBtn').textContent = 'Copy link';
@@ -742,7 +743,7 @@ async function loadRanks() {
       fetch('/api/leaderboard').then((res) => res.json()),
       fetch('/api/me', { method: 'POST', body: JSON.stringify({ k: playerKey() }) }).then((res) => res.json()),
     ]);
-    $('myRank').innerHTML = me.rated ? `· you: ${tierBadge(me.r)} ${me.r}, #${me.pos}` : '';
+    $('myRank').innerHTML = me.rated ? `${tierBadge(me.r)} #${me.pos}` : '';
     $('rankList').innerHTML = top.top.length
       ? top.top.map((p, i) => `<li><span class="pos">${i + 1}</span><span class="nm">${esc(p.n)}</span>${tierBadge(p.r)}<span class="rt">${p.r}</span></li>`).join('')
       : '<li class="empty">No rated matches yet. Play one!</li>';
@@ -750,8 +751,17 @@ async function loadRanks() {
     $('rankList').innerHTML = '<li class="empty">Could not load the leaderboard</li>';
   }
 }
-$('ranks').addEventListener('toggle', () => {
-  if ($('ranks').open) loadRanks();
+function showRanks(open) {
+  $('ranks').hidden = !open;
+  if (open) {
+    loadRanks();
+    $('ranksClose').focus();
+  }
+}
+$('ranksBtn').addEventListener('click', () => showRanks(true));
+$('ranksClose').addEventListener('click', () => showRanks(false));
+addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('ranks').hidden) showRanks(false);
 });
 if (!ROOM) loadRanks();
 
