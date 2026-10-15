@@ -123,6 +123,9 @@ type Game struct {
 	mode      int
 	modeOrder []int
 	hill      Hill
+	coins     []Coin
+	coinT     float64
+	nextCoin  int
 	sweepA    float64
 	sweepDir  float64
 	sweepOn   bool
@@ -161,6 +164,8 @@ func (g *Game) startRound() {
 		g.startLast()
 	case modeHill:
 		g.startHill()
+	case modeCoins:
+		g.startCoins()
 	}
 	g.events = append(g.events, map[string]any{"k": "start", "m": g.mode, "r": g.roundNo, "of": g.cfg.MatchRounds})
 }
@@ -322,6 +327,7 @@ func (g *Game) step(dt float64) {
 	g.updateSweeper(dt)
 	g.updateCrates(dt)
 	g.updateHill(dt)
+	g.updateCoins(dt)
 
 	for _, p := range g.players {
 		// jumps and ground pounds are airborne, so leaving the island only counts once they land
@@ -427,8 +433,12 @@ func (g *Game) knockOut(p *Player) {
 }
 
 func (g *Game) scoreKnockOut(victim, killer *Player, ev map[string]any) {
-	if g.mode == modeLast {
+	switch g.mode {
+	case modeLast:
 		g.knockOutLast(victim)
+		return
+	case modeCoins:
+		g.spillCoins(victim)
 		return
 	}
 	if g.mode != modeBrawl || killer == nil {
@@ -512,6 +522,9 @@ func (g *Game) thinkBots(dt float64) {
 			if g.mode == modeHill && o.inHill(g.hill) {
 				score -= hillBotPull
 			}
+			if g.mode == modeCoins {
+				score -= float64(o.Score) * botRichPull
+			}
 			if score < pick {
 				pick, best, target = score, d, o
 			}
@@ -525,6 +538,8 @@ func (g *Game) thinkBots(dt float64) {
 		if tx, tz, ok := g.botCrateTarget(b); ok {
 			dx, dz = tx-b.X, tz-b.Z
 		} else if tx, tz, ok := g.botHillTarget(b); ok {
+			dx, dz = tx-b.X, tz-b.Z
+		} else if tx, tz, ok := g.botCoinTarget(b); ok {
 			dx, dz = tx-b.X, tz-b.Z
 		}
 		dx += (rand.Float64() - 0.5) * 3
@@ -752,6 +767,9 @@ func (g *Game) snapshot() []byte {
 	}
 	if g.mode == modeHill && g.phase == phasePlay {
 		msg["hl"] = g.hillState()
+	}
+	if g.mode == modeCoins && g.phase == phasePlay {
+		msg["co"] = g.coinList()
 	}
 	if g.sweepOn {
 		msg["sw"] = [2]float64{r2(g.sweepA), r2(g.sweepHalf())}

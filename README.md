@@ -6,6 +6,11 @@ A small online 3D party brawler. Everyone is a squishy blob on a floating hex is
 - Client: Three.js (vendored, no CDN), toon-shaded low-poly look, snapshot interpolation
 - Bots top the lobby up to `MIN_PLAYERS` whenever at least one human is playing
 - Works on desktop (WASD / arrows, Shift dash, Space jump) and touch (virtual stick, dash and jump buttons)
+- Matches of several rounds, each in one of four modes; the most round wins takes the match:
+  - Bonk Brawl: every knockout scores
+  - Last Blob Standing: three lives each, last one on the island wins
+  - King of the Hill: hold the moving ring, closest to its centre scores
+  - Coin Rush: grab coins, getting knocked off spills half of yours
 - Hold dash to charge a stronger launch; tap for a quick one
 - Power-up crates: heavy, bouncy and ground pound
 - In the last 30 seconds a giant log sweeps the island; jump it or get swept away

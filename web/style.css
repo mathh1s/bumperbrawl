@@ -233,6 +233,7 @@ kbd {
   transform-origin: 50% 60%;
   pointer-events: none;
 }
+#board .coin { display: inline-block; width: 10px; height: 10px; margin-right: 3px; border-radius: 50%; background: #ffc61a; border: 2px solid var(--ink); vertical-align: -1px; }
 #board .hearts { color: #ff4d6d; letter-spacing: -1px; }
 #board .out { font-size: 11px; opacity: 0.55; text-transform: uppercase; }
 #board .wins { font-size: 11px; font-weight: 700; color: #e8a400; -webkit-text-stroke: 0.4px var(--ink); }

@@ -21,6 +21,12 @@ export const MODES = {
     unit: (n) => `${n} second${n === 1 ? '' : 's'} on the hill`,
     cell: (p) => String(p.score),
   },
+  3: {
+    name: 'Coin Rush',
+    rule: 'Grab the coins. Get knocked off and you spill half of yours.',
+    unit: (n) => `${n} coin${n === 1 ? '' : 's'}`,
+    cell: (p) => `<span class="coin"></span>${p.score}`,
+  },
 };
 
 export function modeOf(id) {

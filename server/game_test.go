@@ -408,3 +408,48 @@ func TestHillMovesAndStaysOnTheIsland(t *testing.T) {
 		}
 	}
 }
+
+func coinGame(t *testing.T) (*Game, *Player) {
+	t.Helper()
+	g := brawlGame()
+	p := g.newPlayer("p", 0, 0, false)
+	g.mode = modeCoins
+	g.startCoins()
+	return g, p
+}
+
+func TestCoinPickupScores(t *testing.T) {
+	g, p := coinGame(t)
+	g.coins = []Coin{{ID: 99, X: p.X + 0.3, Z: p.Z}}
+	g.coinT = 10
+	g.updateCoins(1.0 / tickRate)
+	if p.Score != 1 || len(g.coins) != 0 {
+		t.Fatalf("walking into a coin scores it, score=%d coins=%d", p.Score, len(g.coins))
+	}
+}
+
+func TestKnockOutSpillsHalfTheCoins(t *testing.T) {
+	g, p := coinGame(t)
+	before := len(g.coins)
+	p.Score = 7
+	g.knockOut(p)
+	if p.Score != 3 || len(g.coins) != before+4 || countEvents(g, "spill") != 1 {
+		t.Fatalf("7 coins spill 4 back, score=%d coins=%d", p.Score, len(g.coins)-before)
+	}
+	for _, c := range g.coins {
+		if math.Hypot(c.X, c.Z) > g.radius {
+			t.Fatal("spilled coins land on the island")
+		}
+	}
+}
+
+func TestCoinsRefillToTarget(t *testing.T) {
+	g, p := coinGame(t)
+	p.X, p.Z = 100, 100
+	for i := 0; i < tickRate*20; i++ {
+		g.updateCoins(1.0 / tickRate)
+	}
+	if len(g.coins) != coinTarget {
+		t.Fatalf("coins refill to %d, have %d", coinTarget, len(g.coins))
+	}
+}

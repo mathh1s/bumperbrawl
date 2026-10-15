@@ -14,7 +14,7 @@ const (
 )
 
 // modes playable in a match; each match shuffles them and repeats as needed
-var allModes = []int{modeBrawl, modeLast, modeHill}
+var allModes = []int{modeBrawl, modeLast, modeHill, modeCoins}
 
 type Config struct {
 	MinPlayers  int

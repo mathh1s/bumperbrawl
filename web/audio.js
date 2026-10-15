@@ -98,6 +98,10 @@ export const sfx = {
     tone(240, 560, 0.16, { type: 'sine', vol: 0.3 });
     tone(480, 1100, 0.1, { type: 'triangle', vol: 0.08 });
   },
+  coin() {
+    tone(988, 988, 0.07, { type: 'square', vol: 0.09 });
+    tone(1319, 1319, 0.16, { type: 'square', vol: 0.09, delay: 0.07 });
+  },
   pickup() {
     [659, 880, 1175].forEach((f, i) => tone(f, f, 0.14, { type: 'triangle', vol: 0.22, delay: i * 0.06 }));
   },
