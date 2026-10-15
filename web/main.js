@@ -991,16 +991,49 @@ function popHillPoints(view) {
   }
 }
 
-// once out, follow the crowned blob, or anyone still standing
-function spectateTarget(view) {
-  let pick = null;
-  for (const [id, p] of view.players) {
-    if (p.flags & (OUT | 4)) continue;
-    if (id === view.cw) return p;
-    pick ??= p;
-  }
-  return pick;
+// once you're out, you pick who to watch; it starts on the crowned blob, or anyone still standing
+let watching = null;
+
+function watchable(view) {
+  return [...view.players.entries()]
+    .filter(([id, p]) => id !== myId && !(p.flags & (OUT | 4)))
+    .map(([id]) => id)
+    .sort((a, b) => a - b);
 }
+
+// a blob you watch stays watched through its falls and only gets swapped once it's out or gone
+function spectateTarget(view) {
+  const cur = watching === null ? null : view.players.get(watching);
+  if (cur && !(cur.flags & OUT)) return cur;
+  const ids = watchable(view);
+  watching = ids.includes(view.cw) ? view.cw : ids[0] ?? null;
+  return watching === null ? null : view.players.get(watching);
+}
+
+function cycleWatching(step) {
+  const view = sample(performance.now() - INTERP_MS);
+  if (!view) return;
+  const ids = watchable(view);
+  if (!ids.length) return;
+  const i = ids.indexOf(watching);
+  watching = ids[(i + step + ids.length) % ids.length];
+}
+
+function updateSpectateBar(view) {
+  const me = joined && view ? view.players.get(myId) : null;
+  const out = !!me && !!(me.flags & OUT) && view.ph === 0;
+  $('spectate').hidden = !out || watching === null;
+  if (!$('spectate').hidden) $('watchName').textContent = nameOf(watching);
+}
+
+$('watchPrev').addEventListener('click', () => cycleWatching(-1));
+$('watchNext').addEventListener('click', () => cycleWatching(1));
+addEventListener('keydown', (e) => {
+  if ($('spectate').hidden || e.target instanceof HTMLInputElement) return;
+  if (e.repeat) return;
+  if (e.code === 'KeyQ' || e.code === 'ArrowLeft') cycleWatching(-1);
+  if (e.code === 'KeyE' || e.code === 'ArrowRight') cycleWatching(1);
+});
 
 // Low three-quarter view so the horizon stays on screen; portrait screens pull back to keep the island in frame
 function updateCamera(dt, view) {
@@ -1110,6 +1143,7 @@ function frame(now) {
   pointToHill(view?.hl ?? (view?.bl && !view.bl[3] ? [view.bl[0], view.bl[1]] : null));
   fx.update(adt);
   updateCamera(dt, view);
+  updateSpectateBar(view);
   updateHud(dt, view);
   music.play(pickTrack(view));
   if (podium.active && joined) podium.render(renderer, dt);
