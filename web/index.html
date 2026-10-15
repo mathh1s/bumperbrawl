@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+  <meta name="theme-color" content="#5fb8f5">
+  <title>Bumper Brawl</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+  <script type="importmap">{ "imports": { "three": "./vendor/three.module.js" } }</script>
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud" hidden>
+    <div id="timer"><span id="phase">Round</span><b id="time">2:00</b></div>
+    <ol id="board"></ol>
+    <ul id="feed"></ul>
+    <div id="banner"></div>
+    <div id="dash">
+      <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" class="track"/><circle cx="22" cy="22" r="19" class="fill" id="dashRing"/></svg>
+      <span>Dash</span>
+    </div>
+  </div>
+
+  <div id="touch" hidden>
+    <div id="pad"><div id="stick"><div id="knob"></div></div></div>
+    <button id="dashBtn">Dash</button>
+  </div>
+
+  <div id="menu">
+    <form class="card" id="joinForm">
+      <h1>Bumper<br>Brawl</h1>
+      <p class="tag">Bonk everyone off the island before it crumbles.</p>
+      <input id="name" maxlength="16" placeholder="Your name" autocomplete="off" spellcheck="false">
+      <div id="colors"></div>
+      <button id="play" type="submit">Play</button>
+      <p class="keys"><kbd>WASD</kbd> move &nbsp;·&nbsp; <kbd>Space</kbd> dash</p>
+      <p id="status">Connecting…</p>
+    </form>
+  </div>
+
+  <script type="module" src="main.js"></script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+# Bumper Brawl
+
+A small online 3D party brawler. Everyone is a squishy blob on a floating hex island. Bump and dash into other players to knock them into the sea. After 15 seconds the island starts crumbling from the edges, so the arena gets tighter until the round ends. Most bonks wins.
+
+- Server: Go, authoritative physics at 60 Hz, state broadcast at 20 Hz over WebSockets
+- Client: Three.js (vendored, no CDN), toon-shaded low-poly look, snapshot interpolation
+- Bots top the lobby up to `MIN_PLAYERS` whenever at least one human is playing
+- Works on desktop (WASD / arrows + Space or Shift to dash) and touch (virtual stick + dash button)
+
+## Run with Docker
+
+```sh
+cp .env.example .env    # pick a free HOST_PORT
+docker compose up -d --build
+```
+
+Open `http://<host>:<HOST_PORT>`.
+
+## Run locally without Docker
+
+```sh
+cd server
+go run .
+```
+
+Then open http://localhost:8080. `PORT` changes the listen port.
+
+## Config
+
+| Variable          | Default | Meaning                                                        |
+|-------------------|---------|----------------------------------------------------------------|
+| `PORT`            | 8080    | Listen port inside the container / process                     |
+| `MIN_PLAYERS`     | 4       | Bots fill up to this many players (0 = no bots)                |
+| `ALLOWED_ORIGINS` | empty   | Extra allowed WebSocket origins; same-origin always works      |
+| `WEB_DIR`         | auto    | Static files directory                                         |
+
+## Reverse proxy
+
+The websocket lives at `/ws` on the same host as the page. Behind nginx or Caddy, make sure upgrade headers are forwarded (Caddy does this automatically). For nginx:
+
+```nginx
+location / {
+    proxy_pass http://127.0.0.1:8080;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+    proxy_set_header Host $host;
+}
+```
+
+## Layout
+
+```
+server/  game.go   simulation, rounds, bots, snapshots
+         main.go   http server, websocket handling, game loop
+web/     main.js   netcode, interpolation, camera, HUD
+         world.js  sky, water, crumbling island, scenery
+         blobs.js  player characters
+         fx.js     particles
+         audio.js  synthesized sound effects
+         input.js  keyboard and touch controls
+```
