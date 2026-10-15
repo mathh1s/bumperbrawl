@@ -186,3 +186,15 @@ func TestEmotesAreRateLimited(t *testing.T) {
 		t.Fatal("emotes work again after the cooldown")
 	}
 }
+
+func TestLeavingGoesBackToWatching(t *testing.T) {
+	g, cs := privateGame(t, 2)
+	id := cs[0].player.ID
+	g.handle(cs[0], inMsg{T: "leave"})
+	if cs[0].player != nil || g.players[id] != nil {
+		t.Fatal("leaving removes your blob")
+	}
+	if g.hostID != cs[1].player.ID {
+		t.Fatal("the host passes on when the host leaves")
+	}
+}

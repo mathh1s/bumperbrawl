@@ -767,6 +767,15 @@ func (g *Game) handle(c *Client, m inMsg) {
 		}))
 		g.broadcast(g.rosterMsg())
 		g.roomChanged()
+	case "leave":
+		// back to the menu without dropping the connection, so the page keeps watching the room
+		if c.player != nil {
+			delete(g.players, c.player.ID)
+			c.player = nil
+			g.syncBots()
+			g.broadcast(g.rosterMsg())
+			g.roomChanged()
+		}
 	case "ready", "settings", "start", "kick":
 		if c.player != nil {
 			g.handleRoom(c.player, m)

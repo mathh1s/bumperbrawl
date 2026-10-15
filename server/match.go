@@ -92,7 +92,7 @@ func (g *Game) standingsOrder() []*Player {
 func (g *Game) standings() []map[string]any {
 	out := []map[string]any{}
 	for _, p := range g.standingsOrder() {
-		out = append(out, map[string]any{"i": p.ID, "n": p.Name, "c": p.Color, "h": p.Hat, "w": p.Wins})
+		out = append(out, map[string]any{"i": p.ID, "n": p.Name, "c": p.Color, "h": p.Hat, "w": p.Wins, "p": p.MatchPts})
 	}
 	return out
 }

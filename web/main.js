@@ -9,6 +9,7 @@ import { Coins } from './coins.js';
 import { BallPitch } from './ball.js';
 import { Bubbles, EMOTES } from './emotes.js';
 import { TimeWarp } from './timewarp.js';
+import { EndScreen } from './endscreen.js';
 import { FX } from './fx.js';
 import { Crates, POWERS } from './crates.js';
 import { modeOf, OUT, TEAMS } from './modes.js';
@@ -131,16 +132,14 @@ function onMessage(m) {
       renderWho();
       break;
     }
-    case 'rank': {
-      const d = m.new - m.old;
-      const t = tierOf(m.new);
-      addFeed(`Rating <b>${m.new}</b> (${d >= 0 ? '+' : ''}${d})${tierOf(m.old) !== t ? ` · now <b>${t.name}</b>!` : ''}`);
+    case 'rank':
+      endscreen.noteRank(m);
+      if (tierOf(m.old) !== tierOf(m.new)) addFeed(`You're now <b>${tierOf(m.new).name}</b>!`);
       break;
-    }
     case 'crowns':
       profile.crowns = m.total;
       $('crowns').querySelector('b').textContent = m.total;
-      addFeed(`+${m.got} 👑 for that match`);
+      endscreen.noteCrowns(m);
       break;
     case 'kicked':
       backToMenu('The host removed you from the room.');
@@ -373,19 +372,12 @@ function fireEvents(rt, view) {
         fx.dust(e.x, 0.4, e.z);
         break;
       case 'lobby':
-        podium.hide();
-        hideAwards();
-        lastEnd = null;
-        $('standings').hidden = true;
-        document.body.classList.remove('standings');
+        closeResults();
         if (joined) banner('Back to the lobby<small>ready up for another match</small>', 2600);
         break;
       case 'start': {
-        podium.hide();
-        hideAwards();
-        lastEnd = null;
-        $('standings').hidden = true;
-        document.body.classList.remove('standings');
+        closeResults();
+        endscreen.reset();
         const mode = modeOf(e.m);
         if (joined) {
           const team = e.m === 4 ? TEAMS[latest?.players.get(myId)?.team] : null;
@@ -406,37 +398,41 @@ function fireEvents(rt, view) {
         lastKo = null;
         if (!joined) break;
         const mode = modeOf(e.m);
-        let text;
-        if (e.mo && e.fm === KNOCKOUT) {
-          text = e.ch ? `${esc(e.ch)} ${verb(e.ch)} the show!<small>last blob standing in the final</small>` : 'Show over!<small>nobody survived the final</small>';
-        } else if (e.mo) {
-          text = e.ch ? `${esc(e.ch)} ${verb(e.ch)} the match!<small>most rounds won</small>` : 'Match over!<small>nobody won a round</small>';
-        } else if (e.fm === KNOCKOUT) {
-          // qualifying rounds are about who goes through, so that is all the banner says
-          addFeed(`${e.q.length} qualified, ${e.x.length} eliminated`);
-          if (e.q.includes(myId)) {
-            banner('Qualified!<small>on to the next round</small>', 3500);
-            sfx.crown();
-          } else if (e.x.includes(myId)) {
-            banner('Eliminated!<small>stick around and watch the rest</small>', 3500);
-            sfx.out();
-          }
-          showStandings(e.st ?? [], false);
+        const standings = e.st ?? [];
+        const leaveLabel = ROOM ? 'Leave room' : 'Go home';
+        if (e.fm === KNOCKOUT && !e.mo) {
+          // qualifying rounds are about who goes through, so that is all the results say
+          const through = e.q.includes(myId), out = e.x.includes(myId);
+          endscreen.show({
+            kicker: roundLabel(e),
+            title: through ? 'Qualified!' : out ? 'Eliminated!' : `${e.q.length} go through`,
+            sub: through ? 'On to the next round' : out ? 'Stick around and watch the rest' : `${e.x.length} knocked out of the show`,
+            tone: through ? 'good' : out ? 'bad' : '',
+            standings, final: false, myId, leaveLabel,
+          });
+          if (through) sfx.crown();
+          else if (out) sfx.out();
           break;
-        } else {
-          text = e.w ? `${esc(e.w)} ${verb(e.w)} round ${e.r}!<small>${mode.unit(e.s)}</small>` : `Round ${e.r} over!<small>nobody scored</small>`;
         }
+        let kicker, title, sub;
+        if (e.mo) {
+          kicker = e.fm === KNOCKOUT ? 'The final' : 'Final results';
+          title = e.ch ? `${esc(e.ch)} ${verb(e.ch)}${e.fm === KNOCKOUT ? ' the show' : ' the match'}!` : 'Nobody won this time';
+          sub = e.fm === KNOCKOUT ? 'Last blob standing in the final' : e.ch ? 'Most rounds won' : 'Nobody took a round';
+        } else {
+          kicker = `${roundLabel(e)} · ${mode.name}`;
+          title = e.w ? `${esc(e.w)} ${verb(e.w)} the round!` : 'Round over';
+          sub = e.w ? mode.unit(e.s) : 'Nobody scored';
+        }
+        const won = (e.mo ? e.ch : e.w)?.split(' & ').includes(nameOf(myId));
         const reveal = () => {
           // a new round may already have started if the break was cut short
           if (lastEnd !== e) return;
-          if (e.top?.length) {
-            podium.show(e.top, e.mo ? '★' : '');
-            banner(text, e.mo ? 9000 : 6500, 'high');
-          } else {
-            banner(text, 4000);
-          }
-          showStandings(e.st ?? [], e.mo);
-          if (e.mo) showAwards(e.aw ?? []);
+          if (e.top?.length) podium.show(e.top, e.mo ? '★' : '');
+          endscreen.show({
+            kicker, title, sub, tone: won ? 'good' : '',
+            standings, final: !!e.mo, awards: e.mo ? e.aw ?? [] : [], myId, leaveLabel,
+          });
           music.victory();
         };
         if (replay) setTimeout(reveal, 1500);
@@ -489,32 +485,22 @@ function roundLabel({ r, of, fm, kq, fin }) {
 // the server joins co-winners with an ampersand
 const verb = (who) => (who.includes(' & ') ? 'win' : 'wins');
 
-function showStandings(list, final) {
-  const el = $('standings');
-  el.hidden = !list.some((p) => p.w > 0);
-  document.body.classList.toggle('standings', !el.hidden);
-  el.querySelector('h3').textContent = final ? 'Final standings' : 'Match standings';
-  el.querySelector('ol').innerHTML = list.slice(0, 6).map((p) =>
-    `<li class="${p.i === myId ? 'me' : ''}"><span class="dot" style="background:${PALETTE[p.c]}"></span>`
-    + `<span class="nm">${esc(p.n)}</span><span class="stars">${'★'.repeat(Math.min(p.w, 5))}${p.w > 5 ? `×${p.w}` : ''}</span></li>`,
-  ).join('');
+const endscreen = new EndScreen($('endscreen'), { onLeave: leaveGame });
+
+function closeResults() {
+  podium.hide();
+  endscreen.hide();
+  lastEnd = null;
 }
 
-// silly titles from the match, dealt onto the podium screen one after another
-function showAwards(list) {
-  const el = $('awards');
-  el.hidden = !list.length;
-  document.body.classList.toggle('awards', list.length > 0);
-  el.innerHTML = list.map((a, i) =>
-    `<li style="animation-delay:${1.2 + i * 0.45}s" class="${a.i === myId ? 'me' : ''}">`
-    + `<b>${esc(a.t)}</b><span class="who"><span class="dot" style="background:${PALETTE[a.c]}"></span>${esc(a.n)}</span>`
-    + `<small>${esc(a.d)}</small></li>`,
-  ).join('');
-}
-
-function hideAwards() {
-  $('awards').hidden = true;
-  document.body.classList.remove('awards');
+// public games drop you back on the title screen; a private room is left entirely
+function leaveGame() {
+  if (ROOM) {
+    location.href = '/';
+    return;
+  }
+  send({ t: 'leave' });
+  backToMenu('');
 }
 
 const CROWN_SVG = '<svg class="crown" viewBox="0 0 24 18"><path d="M2 16h20l1-11-6 4-5-8-5 8-6-4z"/></svg>';
@@ -552,6 +538,10 @@ function updateHud(dt, view) {
   renderLobby();
   if (inLobby) return;
   $('time').textContent = `${Math.floor(tl / 60)}:${String(tl % 60).padStart(2, '0')}`;
+  if (endscreen.open && latest.ph === 1) {
+    const next = lastEnd?.mo ? (ROOM ? 'Back to the lobby in' : 'Next match in') : 'Next round in';
+    endscreen.setCountdown(`${next} <b>${tl}</b>`);
+  }
   const crumbling = latest.ph === 0 && view && view.r < ARENA_MAX - 0.01;
   $('phase').textContent = latest.ph === 1
     ? (lastEnd?.mo ? (ROOM ? 'Lobby in' : 'New match in') : 'Next round')
@@ -896,13 +886,13 @@ function backToMenu(reason) {
   myId = null;
   predictor = null;
   wantJoin = null;
-  podium.hide();
-  hideAwards();
+  closeResults();
+  endscreen.reset();
   $('menu').hidden = false;
   $('hud').hidden = true;
   $('touch').hidden = true;
   $('lobby').hidden = true;
-  document.body.classList.remove('lobby', 'standings');
+  document.body.classList.remove('lobby');
   setStatus(reason);
   renderWho();
 }
@@ -1078,12 +1068,7 @@ function frame(now) {
       b.setCrown(id === view.cw, ramp);
       b.setTeam(view.bl && s ? TEAMS[s.team]?.color : null);
     }
-    if (view.ph !== 1 && (podium.active || !$('standings').hidden)) {
-      podium.hide();
-      hideAwards();
-      $('standings').hidden = true;
-      document.body.classList.remove('standings');
-    }
+    if (view.ph !== 1 && (podium.active || endscreen.open)) closeResults();
   }
 
   // tiles use the newest snapshot: your own blob is predicted ahead of the interpolated view,

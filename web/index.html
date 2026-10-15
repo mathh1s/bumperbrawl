@@ -25,8 +25,15 @@
     <div id="bubbles"></div>
     <button type="button" id="emoteBtn" aria-label="Emotes" aria-expanded="false">💬</button>
     <div id="emotePicker" hidden role="menu" aria-label="Emotes"></div>
-    <div id="standings" hidden><h3>Match standings</h3><ol></ol></div>
-    <ol id="awards" hidden aria-label="Match awards"></ol>
+    <section id="endscreen" hidden aria-live="polite" aria-label="Results">
+      <header class="esHead"><span class="kicker"></span><h2></h2><p class="sub"></p></header>
+      <div class="esSide">
+        <div class="esTable"><h3></h3><ol></ol></div>
+        <ul class="esYou" hidden></ul>
+      </div>
+      <ol class="esAwards" hidden aria-label="Match awards"></ol>
+      <footer class="esBar"><span class="esNext"></span><button type="button" id="esLeave" class="chip">Go home</button></footer>
+    </section>
     <div id="power" hidden><span id="powerName"></span><div class="bar"><i id="powerBar"></i></div></div>
     <div id="dash">
       <svg viewBox="0 0 44 44"><circle cx="22" cy="22" r="19" class="track"/><circle cx="22" cy="22" r="19" class="fill" id="dashRing"/></svg>

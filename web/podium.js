@@ -116,6 +116,10 @@ export class Podium {
     const dist = Math.max(9.5, 4.4 / (halfH * aspect));
     this.camera.position.set(Math.sin(this.t * 0.25) * 1.2, 2.2 + dist * 0.13, dist);
     this.camera.lookAt(0, 2.3, 0);
+    // on wide screens the results sit on the left, so slide the podium right of centre
+    const w = renderer.domElement.clientWidth, h = renderer.domElement.clientHeight;
+    if (aspect > 1.2) this.camera.setViewOffset(w, h, -w * 0.12, 0, w, h);
+    else this.camera.clearViewOffset();
 
     for (const e of this.blobs) {
       e.hopT -= dt;
