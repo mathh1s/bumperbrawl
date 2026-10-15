@@ -541,7 +541,9 @@ renderMusicButton();
 
 function pickTrack(view) {
   if (!joined || !view || view.ph === 1) return 'menu';
-  return view.tl <= 30 ? 'final' : 'battle';
+  if (view.tl <= 30) return 'final';
+  // the two round themes take turns so a match doesn't loop one song
+  return (latest?.rn ?? 1) % 2 ? 'jam' : 'wobble';
 }
 
 // ==== rooms ====

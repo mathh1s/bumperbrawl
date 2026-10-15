@@ -1,14 +1,17 @@
 """Composes and renders the Bumper Brawl soundtrack.
 
-Every track is written as note grids and patterns below, played through the
-GeneralUser GS soundfont, given a convolution reverb and encoded to mp3.
-Loops are cut from the middle of a three times render so the reverb and note
-tails of the previous pass are already present at the loop start, which makes
-the loop seamless. The loop points land in web/music/tracks.json.
+Every track is written as note grids and patterns below, played through a
+soundfont, given a convolution reverb and encoded to mp3. The round themes
+use MuseScore General for its livelier brass and mallets; the rest use
+GeneralUser GS. Loops are cut from the middle of a three times render so the
+reverb and note tails of the previous pass are already present at the loop
+start, which makes the loop seamless. The loop points land in
+web/music/tracks.json.
 
 > setup      pip install --no-deps tinysoundfont && pip install numpy scipy
 > soundfont  git clone --depth 1 https://github.com/mrbumpy409/GeneralUser-GS
-> run        python3 tools/music/compose.py path/to/GeneralUser-GS.sf2
+> soundfont  https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/MuseScore_General.sf2
+> run        python3 tools/music/compose.py GeneralUser-GS.sf2 MuseScore_General.sf2
 > needs      ffmpeg with libmp3lame on PATH
 """
 
@@ -225,8 +228,8 @@ def master(audio, target_rms=0.12):
     rms = np.sqrt((audio ** 2).mean())
     audio = audio * (target_rms / rms)
     # static gain plus a soft knee keeps the loop periodic, unlike a dynamic limiter
-    # 0.88 ceiling leaves room for mp3 overshoot on decode
-    return np.tanh(audio * 1.15) / np.tanh(1.15) * 0.88
+    # 0.84 ceiling leaves room for mp3 overshoot on decode
+    return np.tanh(audio * 1.15) / np.tanh(1.15) * 0.84
 
 
 def encode(audio, name):
@@ -254,73 +257,144 @@ def render_once(song, soundfont, name):
 
 # ==== tracks ====
 
-def battle():
-    """Bonk Party: the round theme, G major disco-funk at a game-show pace."""
-    s = Song(138, 32)
-    s.channel(0, 80, 100, 40, level=-17)    # square lead
-    s.channel(1, 9, 100, 90, level=-22)     # glockenspiel doubling the lead
-    s.channel(2, 61, 100, 64, level=-18)    # brass section
-    s.channel(3, 7, 100, 26, level=-24)     # clavinet chops
-    s.channel(4, 39, 100, 64, level=-16)   # synth bass
-    s.channel(5, 4, 100, 100, level=-26)    # electric piano
-    s.channel(6, 55, 100, 64, level=-19)    # orchestra hit
-    s.channel(9, 0, 100, 64, drums=True, level=-14)
+def jam():
+    """Jelly Jam: round theme, C major disco with a marimba hook and a horn section.
+    Played on MuseScore General, whose brass and mallets come closest to a live party band."""
+    s = Song(126, 32)
+    s.channel(0, 13, 100, 44, level=-19)          # xylophone hook
+    s.channel(1, 12, 100, 84, level=-22)          # marimba doubling an octave down
+    s.channel(2, 56, 100, 58, level=-18)          # trumpet lead
+    s.channel(3, 61, 100, 70, bank=8, level=-20)  # horn section stabs
+    s.channel(4, 28, 100, 30, bank=8, level=-25)  # funk guitar chops
+    s.channel(5, 33, 100, 64, level=-16)          # fingered bass
+    s.channel(6, 45, 100, 96, level=-24)          # pizzicato strings in the breakdown
+    s.channel(7, 57, 100, 40, level=-21)          # trombone under the trumpet
+    s.channel(9, 8, 100, 64, drums=True, level=-14)
 
-    a = ["G", "Em", "C", "D", "G", "Em", "C D", "G"]
-    b = ["C", "D", "Bm7", "Em", "Am7", "D", "G", "D7"]
-    c = ["Em", "C", "G", "D", "Em", "C", "Am7", "D7"]
+    a = ["C", "Am7", "Dm7", "G7", "C", "Am7", "Dm7 G7", "C"]
+    b = ["F", "G", "Em7", "Am7", "Dm7", "G", "E7", "Am7 G7"]
+    c = ["Am7", "F", "Dm7", "G", "F", "G", "Ab", "G7"]
     prog = a + a + b + c
 
-    hook = ["G5 . G5 A5 B5 . G5 .", "E5 - . E5 G5 . B5 .", "C6 - B5 A5 G5 . E5 .", "F#5 - G5 - A5 - . D5",
-            "G5 . G5 A5 B5 . D6 .", "E6 - D6 B5 G5 . E5 .", "C6 . B5 . A5 . F#5 .", "G5 - - - . . D5 E5"]
-    hook2 = hook[:7] + ["G5 - - - . . . ."]
-    verse = ["E5 . G5 . C6 . G5 .", "F#5 . A5 . D6 . A5 .", "B5 - A5 - F#5 - D5 -", "E5 - G5 - B5 - E6 -",
-             "C6 . B5 . A5 . E5 .", "F#5 . G5 . A5 . D6 .", "B5 - - D6 - - G6 -", "F#6 - E6 - D6 - C6 -"]
+    hook = ["E5 . G5 . C6 . G5 A5", "G5 . E5 . C5 - . .", "F5 . A5 . D6 . C6 A5", "B5 - G5 - . F5 E5 D5",
+            "E5 . G5 . C6 . E6 .", "D6 . C6 . A5 . G5 .", "F5 A5 D6 . B5 . G5 .", "C6 - - - . G5 A5 B5"]
+    verse = ["A5 - - C6 - - A5 -", "B5 - - D6 - - B5 -", "G5 . G5 . B5 . E6 -", "C6 - - - . . . .",
+             "A5 - - D6 - - F6 -", "D6 - - B5 - - G5 -", "G#5 . B5 . D6 . E6 -", "C6 - - - B5 - - -"]
+    breakdown = ["A5 . E5 . A5 . C6 .", "A5 . F5 . C5 . F5 .", "D5 . F5 . A5 . D6 .", "B5 . G5 . D5 . G5 ."]
+    build = ["C5 - - - F5 - - -", "D5 - - - G5 - - -", "Eb5 - - - Ab5 - - -", "B5 - - - D6 - F6 -"]
 
-    # bouncy, clipped notes are most of the character
-    for i, mel in enumerate(hook + hook2):
-        s.line(0, i, mel, 92, legato=0.55)
-        s.line(1, i, mel, 74, legato=0.55)
+    for i, mel in enumerate(hook):
+        s.line(0, i, mel, 92, legato=0.5)
+        s.line(1, i, mel, 80, legato=0.6, octave=-1)
+        # second time round the trumpet takes the hook and the mallets answer softly
+        s.line(2, 8 + i, mel, 96, legato=0.55, octave=-1)
+        s.line(0, 8 + i, mel, 60, legato=0.5)
     for i, mel in enumerate(verse):
-        s.line(0, 16 + i, mel, 88, legato=0.6, octave=-1)
-        s.line(1, 16 + i, mel, 70, legato=0.6)
-    for i, mel in enumerate(["B4 - - - . . . .", "C5 - - - . . . .", "B4 - - - G4 - - -", "A4 - - - F#4 - - -"]):
-        s.line(1, 24 + i, mel, 60)
-    s.line(0, 30, "E5 F#5 G5 A5 B5 C6 D6 E6", 84, legato=0.8)
-    s.line(0, 31, "F#5 A5 C6 D6 F#6 - - -", 92, legato=0.8)
+        s.line(2, 16 + i, mel, 100, legato=0.85, octave=-1)
+        s.line(7, 16 + i, mel, 86, legato=0.85, octave=-2)
+        s.line(0, 16 + i, mel, 58, legato=0.4)
+    for i, mel in enumerate(breakdown):
+        s.line(1, 24 + i, mel, 86, legato=0.5)
+        s.line(6, 24 + i, mel, 80, legato=0.4, octave=-1)
+    for i, mel in enumerate(build):
+        s.line(2, 28 + i, mel, 98, legato=0.8, octave=-1)
+        s.line(7, 28 + i, mel, 90, legato=0.8, octave=-2)
+    s.line(0, 31, "G5 A5 B5 C6 D6 E6 F6 G6", 84, legato=0.6)
 
     for bar, chord in enumerate(prog):
         if bar < 24:
-            s.chords(3, bar, chord, [1, 3, 5, 7], 0.12, 64, 72)
-            s.bass(4, bar, chord, "R 8 R 8 R 8 5 8", 102)
+            s.bass(5, bar, chord, "R 8 R 8 R 8 R 8", 104)
+            s.chords(4, bar, chord, [1, 3, 5, 7], 0.12, 64, 76)
+            # horn stabs answer the melody on the and of 2 and on 4
+            if bar % 2 == 1 or bar >= 16:
+                s.chords(3, bar, chord, [3, 6], 0.25, 64, 98)
+        elif bar < 28:
+            s.bass(5, bar, chord, "R - - - . . 5 8", 98)
         else:
-            s.bass(4, bar, chord, "R - - - R - - -" if bar < 30 else "R R R R R R R R", 98)
-        if 8 <= bar < 24:
-            # charleston-style brass stabs on 1, the and of 2, and 3
-            s.chords(2, bar, chord, [0, 3, 4], 0.3, 62, 94)
-        for start, ch, span in s.spans(bar, chord):
-            if bar >= 16:
-                for k in voicing(ch, 60):
-                    s.note(5, start, span * 0.9, k, 48)
-    for bar in (0, 16):
-        for k in voicing(prog[bar], 60):
-            s.note(6, bar * 4, 0.6, k, 92)
+            s.bass(5, bar, chord, "R R R R R R R R", 100)
+            s.chords(3, bar, chord, [0, 3, 6], 0.3, 64, 102)
 
     for bar in range(32):
         last = bar % 8 == 7
         if bar < 8:
-            p = {"kick": "X...x...X...x...", "clap": "....X.......X...", "hat": "x.x.x.x.x.x.x.x.", "ohat": "..o...o...o...o."}
+            p = {"kick": "X...x...X...x...", "clap": "....X.......X...", "hat": "xoxoxoxoxoxoxoxo", "ohat": "..o...o...o...o."}
         elif bar < 24:
-            p = {"kick": "X...x...X...x...", "clap": "....X.......X...", "snare": "....o.......o...",
+            p = {"kick": "X...x...X...x...", "clap": "....X.......X...", "snare": "....o.......o..o",
                  "hat": "xoxoxoxoxoxoxoxo", "ohat": "..x...x...x...x.", "tamb": "..o...o...o...o."}
-        elif bar < 30:
-            p = {"kick": "X.......x.......", "clap": "............X...", "shaker": "oxoxoxoxoxoxoxox"}
-        elif bar == 30:
-            p = {"kick": "X...x...X...x...", "snare": "x...x...x...x...", "shaker": "oxoxoxoxoxoxoxox"}
+        elif bar < 28:
+            p = {"kick": "X.......x.......", "clap": "........X.......", "shaker": "oxoxoxoxoxoxoxox"}
+        elif bar < 31:
+            p = {"kick": "X...x...X...x...", "snare": "x.x.x.x.x.x.x.x.", "shaker": "oxoxoxoxoxoxoxox"}
         else:
-            p = {"kick": "X...x...X...x...", "snare": "o.o.o.o.xoxoxXXX"}
+            p = {"kick": "X...x...X...x...", "snare": "xxxxxxxxxxxxXXXX"}
         if last and bar < 24:
-            p.update(htom="........x.x.....", mtom="..........x.x...", ltom="............xxxx", ohat="..x...x.........")
+            p.update(htom="........x.x.....", mtom="..........x.x...", ltom="............x.x.", ohat="..x...x.........")
+        if bar % 8 == 0:
+            p["crash"] = "X..............."
+        if bar in (3, 11, 19):
+            p["cowbell"] = "..x...x...x...x."
+        s.drums(bar, p)
+    return s
+
+
+def wobble():
+    """Wobble Run: round theme, F major ska bounce with an oompah tuba and a trumpet and trombone pair."""
+    s = Song(152, 32)
+    s.channel(0, 56, 100, 52, level=-17)          # trumpet lead
+    s.channel(1, 57, 100, 76, level=-21)          # trombone, melody an octave down
+    s.channel(2, 13, 100, 40, level=-20)          # xylophone runs
+    s.channel(3, 58, 100, 64, level=-15)          # tuba bass
+    s.channel(4, 27, 100, 92, level=-23)          # clean guitar skank
+    s.channel(5, 17, 100, 36, level=-26)          # percussive organ skank
+    s.channel(6, 115, 100, 64, bank=1, level=-24)  # temple blocks
+    s.channel(7, 61, 100, 64, level=-20)          # brass pads in the bridge
+    s.channel(9, 0, 100, 64, drums=True, level=-15)
+
+    a = ["F", "C7", "F", "Bb", "F", "C7", "Bb C7", "F"]
+    b = ["Dm", "A7", "Dm", "Gm C7", "F", "D7", "Gm C7", "F"]
+    c = ["Bb", "F", "C7", "F", "Bb", "F", "G7", "C7"]
+    prog = a + b + a + c
+
+    tune = ["C5 . F5 . A5 . F5 .", "G5 . E5 . C5 - . .", "A5 . C6 . A5 . F5 .", "D6 - - - Bb5 - . .",
+            "C6 . A5 . F5 . A5 .", "Bb5 . G5 . E5 . G5 .", "D6 . Bb5 . E5 . G5 .", "F5 - - - . . C5 E5"]
+    runs = ["D5 F5 A5 D6 . A5 F5 D5", "C#5 E5 A5 C#6 . A5 E5 C#5", "D5 F5 A5 D6 F6 - D6 .", "D6 . Bb5 . C6 . E5 .",
+            "F5 A5 C6 F6 . C6 A5 F5", "F#5 A5 C6 D6 . C6 A5 F#5", "G5 Bb5 D6 G6 . E6 C6 Bb5", "A5 - F5 - C5 - . ."]
+    bridge = ["D6 - - - F6 - - -", "C6 - - - A5 - - -", "Bb5 - - - G5 - - -", "A5 - - - C6 - - -",
+              "D6 - - - F6 - - -", "C6 - - - A5 - - -", "B5 - - - D6 - - -", "E6 - - - G6 - - -"]
+
+    for i, mel in enumerate(tune):
+        s.line(0, i, mel, 96, legato=0.5)
+        s.line(0, 16 + i, mel, 100, legato=0.5)
+        s.line(1, 16 + i, mel, 90, legato=0.5, octave=-1)
+        s.line(2, 16 + i, mel, 54, legato=0.4, octave=1)
+    for i, mel in enumerate(runs):
+        s.line(2, 8 + i, mel, 92, legato=0.5)
+        s.line(1, 8 + i, mel.split()[0] + " - - - . . . .", 80, octave=-1)
+    for i, mel in enumerate(bridge):
+        s.line(0, 24 + i, mel, 92, legato=0.9, octave=-1)
+        s.line(2, 24 + i, mel, 70, legato=0.3)
+    s.line(2, 31, "C5 E5 G5 Bb5 C6 E6 G6 Bb6", 86, legato=0.6)
+
+    for bar, chord in enumerate(prog):
+        # oompah: tuba on the beats, the band on the offbeats
+        s.bass(3, bar, chord, "R . 5 . R . 5 .", 104, octave=1)
+        s.chords(4, bar, chord, [1, 3, 5, 7], 0.18, 62, 82)
+        s.chords(5, bar, chord, [1, 3, 5, 7], 0.18, 70, 64)
+        if bar >= 24:
+            for start, ch, span in s.spans(bar, chord):
+                for k in voicing(ch, 62):
+                    s.note(7, start, span * 0.95, k, 76)
+        if bar % 4 == 3:
+            s.line(6, bar, ". . . . D4 D4 C4 Bb3", 90, legato=0.5)
+
+    for bar in range(32):
+        p = {"kick": "x.......x.......", "snare": "....X.......X...", "hat": "..x...x...x...x."}
+        if 8 <= bar < 16:
+            p.update(snare="....X.......X..o", tamb="oxoxoxoxoxoxoxox")
+        if bar >= 24:
+            p.update(ride="x.x.x.x.x.x.x.x.", hat="................")
+        if bar % 8 == 7:
+            p.update(snare="....X...x.x.xxxx", htom="........x.......", ltom="..........x.....")
         if bar % 8 == 0:
             p["crash"] = "X..............."
         s.drums(bar, p)
@@ -437,16 +511,15 @@ def victory():
 
 
 def main():
-    if len(sys.argv) != 2:
-        sys.exit("usage: compose.py GeneralUser-GS.sf2")
-    sf = sys.argv[1]
-    random.seed(1)
-    tracks = {
-        "menu": render_loop(menu(), sf, "menu"),
-        "battle": render_loop(battle(), sf, "battle"),
-        "final": render_loop(final(), sf, "final"),
-        "victory": render_once(victory(), sf, "victory"),
-    }
+    if len(sys.argv) != 3:
+        sys.exit("usage: compose.py GeneralUser-GS.sf2 MuseScore_General.sf2")
+    gugs, msg = sys.argv[1:]
+    tracks = {}
+    for name, make, sf, once in [("menu", menu, gugs, False), ("jam", jam, msg, False), ("wobble", wobble, msg, False),
+                                 ("final", final, gugs, False), ("victory", victory, gugs, True)]:
+        # seeded per track so changing one track leaves the others' humanizing alone
+        random.seed(name)
+        tracks[name] = (render_once if once else render_loop)(make(), sf, name)
     (OUT / "tracks.json").write_text(json.dumps(tracks, indent=2) + "\n")
     for name, t in tracks.items():
         print(name, t)

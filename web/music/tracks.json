@@ -4,10 +4,15 @@
     "loopStart": 0.5,
     "loopEnd": 34.785714285714285
   },
-  "battle": {
-    "file": "music/battle.mp3",
+  "jam": {
+    "file": "music/jam.mp3",
     "loopStart": 0.5,
-    "loopEnd": 56.1521768707483
+    "loopEnd": 61.45238095238095
+  },
+  "wobble": {
+    "file": "music/wobble.mp3",
+    "loopStart": 0.5,
+    "loopEnd": 51.026326530612245
   },
   "final": {
     "file": "music/final.mp3",

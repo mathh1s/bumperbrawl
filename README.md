@@ -63,12 +63,14 @@ location / {
 ## Soundtrack and sound effects
 
 The music in `web/music/` is composed in `tools/music/compose.py` and rendered with the
-[GeneralUser GS](https://github.com/mrbumpy409/GeneralUser-GS) soundfont. To change or regenerate it:
+[GeneralUser GS](https://github.com/mrbumpy409/GeneralUser-GS) soundfont and, for the two round themes,
+MuseScore General (MIT; S. Christian Collins, based on FluidR3 by Frank Wen). To change or regenerate it:
 
 ```sh
 pip install --no-deps tinysoundfont && pip install numpy scipy
 git clone --depth 1 https://github.com/mrbumpy409/GeneralUser-GS /tmp/gugs
-python3 tools/music/compose.py /tmp/gugs/GeneralUser-GS.sf2
+curl -Lo /tmp/msg.sf2 https://ftp.osuosl.org/pub/musescore/soundfont/MuseScore_General/MuseScore_General.sf2
+python3 tools/music/compose.py /tmp/gugs/GeneralUser-GS.sf2 /tmp/msg.sf2
 ```
 
 This rewrites the mp3 files and `web/music/tracks.json` (loop points). The sound effects in `web/sfx/` come from
