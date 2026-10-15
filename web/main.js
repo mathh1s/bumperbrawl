@@ -4,6 +4,7 @@ import { Blob, PALETTE, HATS } from './blobs.js';
 import { Preview } from './preview.js';
 import { Podium } from './podium.js';
 import { Sweeper } from './sweeper.js';
+import { HillRing } from './hill.js';
 import { FX } from './fx.js';
 import { Crates, POWERS } from './crates.js';
 import { modeOf, OUT } from './modes.js';
@@ -36,6 +37,9 @@ const world = new World(scene, ramp, ARENA_MAX, fx);
 const crates = new Crates(scene, ramp);
 const podium = new Podium(ramp);
 const sweeper = new Sweeper(scene, ramp, fx);
+const hillRing = new HillRing(scene);
+const lastScores = new Map();
+const arrowPos = new THREE.Vector3();
 sweeper.onLand = () => {
   shake = 0.5;
   if (joined) sfx.pound(true);
@@ -126,7 +130,7 @@ function onSnapshot(m) {
     players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0, wins: a[10] ?? 0 });
   }
   const t = m.now * 1000 + clockOffset;
-  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1 };
+  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, hl: m.hl };
   snaps.push(snap);
   if (snaps.length > 60) snaps.shift();
   latest = snap;
@@ -169,7 +173,7 @@ function sample(rt) {
     });
   }
   const sw = a.sw && b.sw ? [lerpAngle(a.sw[0], b.sw[0], k), a.sw[1] + (b.sw[1] - a.sw[1]) * k] : b.sw;
-  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw, sw };
+  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw, sw, hl: b.hl };
 }
 
 // ==== events ====
@@ -253,6 +257,9 @@ function fireEvents(rt, view) {
         if (joined) sfx.bump(16, me ? Math.hypot(me.x - e.x, me.z - e.z) < 2 : false);
         break;
       }
+      case 'hm':
+        fx.ring(e.x, e.z, '#ffffff', 3.5);
+        break;
       case 'cg':
         fx.dust(e.x, 0.4, e.z);
         break;
@@ -564,6 +571,40 @@ const lookAt = new THREE.Vector3();
 let menuAngle = 0;
 let shake = 0;
 
+// an arrow on the screen edge while the ring is out of view
+function pointToHill(hl) {
+  const el = $('hillArrow');
+  if (!hl || !joined || podium.active) {
+    el.hidden = true;
+    return;
+  }
+  arrowPos.set(hl[0], 1, hl[1]).project(camera);
+  const behind = arrowPos.z > 1;
+  const onScreen = !behind && Math.abs(arrowPos.x) < 0.92 && Math.abs(arrowPos.y) < 0.88;
+  el.hidden = onScreen;
+  if (onScreen) return;
+  let { x, y } = arrowPos;
+  if (behind) { x = -x; y = -y; }
+  const k = 0.86 / Math.max(Math.abs(x), Math.abs(y), 1e-6);
+  x *= k; y *= k;
+  const px = (x * 0.5 + 0.5) * innerWidth, py = (-y * 0.5 + 0.5) * innerHeight;
+  const angle = Math.atan2(x, y);
+  el.style.transform = `translate(${px - 14}px, ${py - 13}px) rotate(${angle}rad)`;
+  el.style.borderBottomColor = hl[3] ? PALETTE[roster.get(hl[3])?.c ?? 0] : '#ffd43b';
+}
+
+// a +1 over the ring holder each time their score ticks up
+function popHillPoints(view) {
+  for (const [id, p] of view.players) {
+    const before = lastScores.get(id);
+    if (before !== undefined && p.score > before) {
+      fx.text(p.x, 3.3, p.z, '+1', PALETTE[roster.get(id)?.c ?? 0]);
+      if (id === myId) sfx.pickup();
+    }
+    lastScores.set(id, p.score);
+  }
+}
+
 // once out, follow the crowned blob, or anyone still standing
 function spectateTarget(view) {
   let pick = null;
@@ -654,6 +695,9 @@ function frame(now) {
   world.update(dt, view?.r ?? null, camera);
   crates.sync(view?.crates ?? [], dt, t);
   sweeper.update(view?.sw, dt);
+  hillRing.update(view?.hl, dt, t, (id) => roster.get(id)?.c ?? 0);
+  if (view?.hl) popHillPoints(view);
+  pointToHill(view?.hl);
   fx.update(dt);
   pumpInput(dt);
   updateCamera(dt, view);

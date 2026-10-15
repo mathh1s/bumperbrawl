@@ -355,3 +355,56 @@ func TestLateJoinerGetsOneLife(t *testing.T) {
 		t.Fatalf("late joiner lives=%d out=%v", late.Lives, late.Out)
 	}
 }
+
+func hillGame(t *testing.T) (*Game, *Player, *Player) {
+	t.Helper()
+	g := brawlGame()
+	a := g.newPlayer("a", 0, 0, false)
+	b := g.newPlayer("b", 0, 0, false)
+	g.mode = modeHill
+	g.startHill()
+	g.hill.X, g.hill.Z, g.hill.T = 0, 0, hillMoveEvery
+	for _, p := range []*Player{a, b} {
+		p.Ghost, p.X, p.Z = 0, 10, 0
+	}
+	return g, a, b
+}
+
+func TestHillScoresTheSoleOccupant(t *testing.T) {
+	g, a, _ := hillGame(t)
+	a.X = 0.5
+	for i := 0; i < tickRate*3; i++ {
+		g.updateHill(1.0 / tickRate)
+	}
+	if a.Score != 3 || g.hill.Owner != a.ID {
+		t.Fatalf("three seconds alone in the ring is 3 points, got %d", a.Score)
+	}
+}
+
+func TestContestedHillScoresClosestAtHalfRate(t *testing.T) {
+	g, a, b := hillGame(t)
+	a.X, b.X = 0.3, -1.5
+	for i := 0; i < tickRate*4; i++ {
+		g.updateHill(1.0 / tickRate)
+	}
+	if a.Score != 2 || b.Score != 0 || !g.hill.Contested || g.hill.Owner != a.ID {
+		t.Fatalf("contested ring scores the closest blob at half rate, a=%d b=%d", a.Score, b.Score)
+	}
+}
+
+func TestHillMovesAndStaysOnTheIsland(t *testing.T) {
+	g, _, _ := hillGame(t)
+	g.hill.T = 0
+	g.updateHill(1.0 / tickRate)
+	if g.hill.T != hillMoveEvery || countEvents(g, "hm") == 0 {
+		t.Fatal("the ring moves when its timer runs out")
+	}
+	g.radius = arenaMin
+	for i := 0; i < 50; i++ {
+		g.hill.X, g.hill.Z = 10, 0
+		g.updateHill(1.0 / tickRate)
+		if math.Hypot(g.hill.X, g.hill.Z)+hillRadius > g.radius {
+			t.Fatalf("ring at %.1f,%.1f hangs off an island of radius %.1f", g.hill.X, g.hill.Z, g.radius)
+		}
+	}
+}

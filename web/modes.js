@@ -15,6 +15,12 @@ export const MODES = {
     unit: (n) => `${n} li${n === 1 ? 'fe' : 'ves'} left`,
     cell: (p) => (p.flags & OUT ? '<span class="out">out</span>' : `<span class="hearts">${'♥'.repeat(p.score)}</span>`),
   },
+  2: {
+    name: 'King of the Hill',
+    rule: 'Get closest to the centre of the glowing ring. Holding it alone scores twice as fast.',
+    unit: (n) => `${n} second${n === 1 ? '' : 's'} on the hill`,
+    cell: (p) => String(p.score),
+  },
 };
 
 export function modeOf(id) {
