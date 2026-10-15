@@ -26,7 +26,7 @@ type RoomSettings struct {
 }
 
 func (g *Game) settings() RoomSettings {
-	modes := make([]bool, len(allModes))
+	modes := make([]bool, modeCount)
 	for _, m := range g.modes {
 		modes[m] = true
 	}

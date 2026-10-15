@@ -15,7 +15,12 @@ const (
 )
 
 // modes playable in a match; each match shuffles them and repeats as needed
-var allModes = []int{modeBrawl, modeLast, modeHill, modeCoins, modeBall, modeTiles}
+// modeHill (the old ring version of King of the Hill) is archived: its code still builds and is
+// tested, but it's left out of the rotation until it gets a new purpose
+// mode ids run from 0 to modeCount-1, archived ones included, so settings can index by id
+const modeCount = modeClimb + 1
+
+var allModes = []int{modeBrawl, modeLast, modeClimb, modeCoins, modeBall, modeTiles}
 
 type Config struct {
 	MinPlayers  int

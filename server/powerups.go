@@ -58,7 +58,7 @@ func (g *Game) clearCrates() {
 
 func (g *Game) updateCrates(dt float64) {
 	// no crates on the pitch, nor in Hex Drop where they'd land on holes
-	if g.phase == phasePlay && len(g.players) > 0 && g.mode != modeBall && g.mode != modeTiles {
+	if g.phase == phasePlay && len(g.players) > 0 && g.mode != modeBall && g.mode != modeTiles && g.mode != modeClimb {
 		g.crateT -= dt
 		if g.crateT <= 0 && len(g.crates) < crateMax {
 			g.crateT = crateEvery * (0.75 + rand.Float64()*0.5)

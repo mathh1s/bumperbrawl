@@ -15,8 +15,9 @@ export const MODES = {
     unit: (n) => `${n} li${n === 1 ? 'fe' : 'ves'} left`,
     cell: (p) => (p.flags & OUT ? '<span class="out">out</span>' : `<span class="hearts">${'♥'.repeat(p.score)}</span>`),
   },
+  // archived: the old ring version of King of the Hill, out of the rotation (see server/match.go)
   2: {
-    name: 'King of the Hill',
+    name: 'Ring Hold',
     rule: 'Get closest to the centre of the glowing ring. Holding it alone scores twice as fast.',
     unit: (n) => `${n} second${n === 1 ? '' : 's'} on the hill`,
     cell: (p) => String(p.score),
@@ -38,6 +39,12 @@ export const MODES = {
     rule: 'Tiles drop a moment after you step on them. Keep moving and be the last blob standing.',
     unit: (n) => `${n} li${n === 1 ? 'fe' : 'ves'} left`,
     cell: (p) => `<span class="hearts">${'♥'.repeat(p.score)}</span>`,
+  },
+  6: {
+    name: 'King of the Hill',
+    rule: 'Race up the mountain, jump the spinning arms and stay ahead of the slime. First to the top wins.',
+    unit: (n) => (n >= 1000 ? 'made it to the top' : `${n} m up the mountain`),
+    cell: (p) => (p.score >= 1000 ? '🏁' : `${p.score}m`),
   },
 };
 

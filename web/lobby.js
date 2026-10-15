@@ -5,7 +5,8 @@ import { esc } from './text.js';
 // The private room lobby: who is in, who is ready, the match settings and the start button.
 // The host edits the settings; everyone else sees them read-only.
 
-const MODE_IDS = [0, 1, 2, 3, 4, 5];
+// King of the Hill (6) sits where the archived ring mode (2) used to
+const MODE_IDS = [0, 1, 6, 3, 4, 5];
 const KNOCKOUT = 1;
 const FORMATS = [
   { id: 0, name: 'Points', blurb: 'Most round wins takes the match' },

@@ -5,6 +5,10 @@ import (
 	"math/rand/v2"
 )
 
+// Archived: this was King of the Hill before the mountain race took the name (mode_climb.go).
+// Hold the moving ring, closest to the centre scores. It's out of the rotation (see allModes)
+// and waiting for a new purpose.
+
 const (
 	modeHill = 2
 

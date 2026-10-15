@@ -7,6 +7,7 @@ import { Sweeper } from './sweeper.js';
 import { HillRing } from './hill.js';
 import { Coins } from './coins.js';
 import { BallPitch } from './ball.js';
+import { Climb } from './climb.js';
 import { Bubbles, EMOTES } from './emotes.js';
 import { TimeWarp } from './timewarp.js';
 import { EndScreen } from './endscreen.js';
@@ -49,6 +50,9 @@ const sweeper = new Sweeper(scene, ramp, fx);
 const hillRing = new HillRing(scene);
 const coins = new Coins(scene, ramp);
 const pitch = new BallPitch(scene, ramp);
+const climb = new Climb(scene, ramp);
+// the ground under your own blob on the mountain, kept while you're in the air or off the edge
+let myGround = 0;
 const bubbles = new Bubbles($('bubbles'));
 const bubbleVec = new THREE.Vector3();
 const warp = new TimeWarp();
@@ -184,7 +188,7 @@ function onSnapshot(m) {
     players.set(a[0], { x: a[1], z: a[2], y: a[3], a: a[4], flags: a[5], cd: a[6], score: a[7], ch: a[8] ?? 0, pw: a[9] ?? 0, wins: a[10] ?? 0, team: a[11] ?? 0 });
   }
   const t = m.now * 1000 + clockOffset;
-  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, fm: m.fm ?? 0, kq: m.kq ?? 0, fin: !!m.fin, hl: m.hl, co: m.co, bl: m.bl, pt: !!m.pt, hx: m.hx };
+  const snap = { t, r: m.r, ph: m.ph, tl: m.tl, players, crates: m.c ?? [], cw: m.cw ?? 0, sw: m.sw, md: m.md ?? 0, rn: m.rn ?? 1, rm: m.rm ?? 1, fm: m.fm ?? 0, kq: m.kq ?? 0, fin: !!m.fin, hl: m.hl, co: m.co, bl: m.bl, pt: !!m.pt, hx: m.hx, cr: m.cr };
   snaps.push(snap);
   if (snaps.length > 60) snaps.shift();
   const phaseChanged = latest?.ph !== snap.ph;
@@ -235,7 +239,12 @@ function sample(rt) {
   if (a.bl && b.bl && !a.bl[3] && !b.bl[3] && Math.hypot(b.bl[0] - a.bl[0], b.bl[1] - a.bl[1]) < 4) {
     bl = [a.bl[0] + (b.bl[0] - a.bl[0]) * k, a.bl[1] + (b.bl[1] - a.bl[1]) * k, a.bl[2] + (b.bl[2] - a.bl[2]) * k, 0, b.bl[4], b.bl[5]];
   }
-  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw, sw, hl: b.hl, co: b.co, bl, pt: b.pt, hx: b.hx };
+  // the arms turn quickly, so their angles are blended like everything else that moves
+  let cr = b.cr;
+  if (a.cr && b.cr && a.cr.a.length === b.cr.a.length) {
+    cr = { ...b.cr, a: b.cr.a.map((arm, i) => [...arm.slice(0, 4), lerpAngle(a.cr.a[i][4], arm[4], k)]), sl: a.cr.sl + (b.cr.sl - a.cr.sl) * k };
+  }
+  return { r: a.r + (b.r - a.r) * k, ph: b.ph, tl: b.tl, players, crates: b.crates, cw: b.cw, sw, hl: b.hl, co: b.co, bl, pt: b.pt, hx: b.hx, cr };
 }
 
 // ==== events ====
@@ -347,6 +356,10 @@ function fireEvents(rt, view) {
       case 'em':
         // your own bubble already went up when you pressed the key
         if (e.i !== myId) bubbles.show(e.i, e.e);
+        break;
+      case 'summit':
+        addFeed(`<b>${esc(nameOf(e.i))}</b> reached the top!`);
+        if (joined) sfx.crown();
         break;
       case 'goal': {
         const team = TEAMS[e.t];
@@ -599,7 +612,16 @@ function applyPrediction(view) {
   let flags = s.flags & ~(1 | 8);
   if (pv.charging) flags |= 8;
   if (pv.dashing) flags |= 1;
-  view.players.set(myId, { ...s, x: pv.x, y: pv.y, z: pv.z, a: pv.a, ch: pv.ch, flags });
+  // on the mountain the predictor only knows the height above the ground, so add the slope back
+  let y = pv.y;
+  if (view.cr) {
+    const g = s.flags & 4 ? null : climb.groundAt(pv.x, pv.z, myGround);
+    if (g !== null) myGround = g;
+    y += myGround;
+  } else {
+    myGround = 0;
+  }
+  view.players.set(myId, { ...s, x: pv.x, y, z: pv.z, a: pv.a, ch: pv.ch, flags });
 }
 
 // ==== emotes ====
@@ -995,12 +1017,13 @@ function updateCamera(dt, view) {
     camera.position.lerp(new THREE.Vector3(camTarget.x, 6.5 * dist, camTarget.z + 9 * dist), k);
     lookAt.lerp(new THREE.Vector3(camTarget.x, Math.max(close.y, -2), camTarget.z - 1), k);
   } else if (me) {
-    // the pitch is wider than the island, so follow further out to keep the goals in view
-    const follow = view.pt ? 0.8 : 0.6;
-    if (!(me.flags & 4)) camTarget.set(me.x * follow, 0, me.z * follow);
+    // the pitch is wider than the island, so follow further out to keep the goals in view;
+    // the mountain is a long course, so the camera rides along with you and climbs too
+    const follow = view.cr ? 1 : view.pt ? 0.8 : 0.6;
     const k = 1 - Math.exp(-dt * 4);
-    camera.position.lerp(new THREE.Vector3(camTarget.x, 12 * dist, camTarget.z + 17 * dist), k);
-    lookAt.lerp(new THREE.Vector3(camTarget.x, 0, camTarget.z - 2), k);
+    if (!(me.flags & 4)) camTarget.set(me.x * follow, view.cr ? camTarget.y + (me.y - camTarget.y) * k : 0, me.z * follow);
+    camera.position.lerp(new THREE.Vector3(camTarget.x, camTarget.y + 12 * dist, camTarget.z + 17 * dist), k);
+    lookAt.lerp(new THREE.Vector3(camTarget.x, camTarget.y, camTarget.z - 2), k);
   } else {
     menuAngle += dt * 0.06;
     camera.position.set(Math.sin(menuAngle) * 36 * dist, 13 * dist, Math.cos(menuAngle) * 36 * dist);
@@ -1079,8 +1102,9 @@ function frame(now) {
   hillRing.update(view?.hl, dt, t, (id) => roster.get(id)?.c ?? 0);
   coins.sync(view?.co, dt, t);
   pitch.update(view?.pt, view?.bl, dt);
+  climb.update(view?.cr, dt);
   if (view) bubbles.update(camera, view.players, bubbleVec);
-  world.setIslandVisible(!view?.pt);
+  world.setIslandVisible(!view?.pt && !view?.cr);
   if (view?.hl) popHillPoints(view);
   // the same edge arrow points at the ball when it is off screen
   pointToHill(view?.hl ?? (view?.bl && !view.bl[3] ? [view.bl[0], view.bl[1]] : null));

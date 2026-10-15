@@ -9,7 +9,7 @@ A small online 3D party brawler. Everyone is a squishy blob on a floating hex is
 - Matches of several rounds, each in one of six modes; the most round wins takes the match:
   - Bonk Brawl: every knockout scores
   - Last Blob Standing: three lives each, last one on the island wins
-  - King of the Hill: hold the moving ring, closest to its centre scores
+  - King of the Hill: race up a zigzag mountain, jump the spinning arms and stay ahead of the rising slime; first to the top wins the round. The old ring mode (Ring Hold) is archived in `mode_hill.go` and out of the rotation
   - Coin Rush: grab coins, getting knocked off spills half of yours
   - Blob Ball: two teams and a big ball, bonk it into the other team's goal. It's played in a walled stadium instead of on the island, so nobody can fall off
   - Hex Drop: every tile you stand on drops a moment later, so keep moving; two falls and you're out, last blob standing wins
@@ -95,6 +95,7 @@ server/  game.go   simulation, rounds, bots, snapshots
          knockout.go  knockout match format
          mode_ball.go Blob Ball: teams, ball physics, goals, bot play
          mode_tiles.go Hex Drop: tile grid, cracking and regrowing tiles, bot footwork
+         mode_climb.go King of the Hill: mountain course, spinning arms, slime, checkpoints, bot climbing
          main.go   http server, websocket handling, game loop
 web/     main.js   netcode, interpolation, camera, HUD
          predict.js  client-side prediction of your own blob
@@ -103,6 +104,7 @@ web/     main.js   netcode, interpolation, camera, HUD
          emotes.js   emote bubbles
          timewarp.js hit-stop and slow motion on the render clock
          ball.js     Blob Ball stadium, goals and ball
+         climb.js    King of the Hill mountain, arms and slime
          world.js  sky, water, crumbling island, scenery
          blobs.js    player characters and hats
          preview.js  blob preview in the menu

@@ -55,14 +55,14 @@ func TestPrivateRoomWaitsForReady(t *testing.T) {
 
 func TestHostControlsSettingsAndStart(t *testing.T) {
 	g, cs := privateGame(t, 2)
-	set := RoomSettings{Rounds: 2, Modes: []bool{false, false, true, false}, Fill: 5, Time: 90}
+	set := RoomSettings{Rounds: 2, Modes: []bool{false, false, false, true}, Fill: 5, Time: 90}
 
 	g.handle(cs[1], inMsg{T: "settings", Set: &set})
 	if g.cfg.MatchRounds == 2 {
 		t.Fatal("only the host may change settings")
 	}
 	g.handle(cs[0], inMsg{T: "settings", Set: &set})
-	if g.cfg.MatchRounds != 2 || g.cfg.RoundTime != 90 || len(g.modes) != 1 || g.modes[0] != modeHill {
+	if g.cfg.MatchRounds != 2 || g.cfg.RoundTime != 90 || len(g.modes) != 1 || g.modes[0] != modeCoins {
 		t.Fatalf("settings not applied: %+v modes %v", g.cfg, g.modes)
 	}
 	if len(g.players) != 5 {

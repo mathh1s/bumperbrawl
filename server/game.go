@@ -85,6 +85,9 @@ type Player struct {
 	Elim       bool // knocked out of a knockout match
 	OutAt      float64
 	Team       int
+	GroundY    float64 // course height under the blob in King of the Hill, 0 elsewhere
+	Check      int     // last landing reached in King of the Hill
+	ArmCD      float64
 
 	Key          string // hashed profile key, public room only
 	Rating       float64
@@ -163,6 +166,10 @@ type Game struct {
 	tileIndex  map[hexKey]int
 	tileGraceT float64
 
+	course    []Seg
+	arms      []Arm
+	climbDone bool
+
 	store *Store // ratings, public room only
 }
 
@@ -178,6 +185,7 @@ func NewGame(code string, cfg Config) *Game {
 		private: code != "",
 	}
 	g.tiles, g.tileIndex = buildTiles()
+	g.course, g.arms = buildCourse()
 	if g.private {
 		g.enterLobby()
 		g.events = nil
@@ -216,6 +224,8 @@ func (g *Game) startRound() {
 		g.startBall()
 	case modeTiles:
 		g.startTiles()
+	case modeClimb:
+		g.startClimb()
 	}
 	for _, p := range g.players {
 		if p.Elim {
@@ -268,8 +278,8 @@ func (g *Game) arenaRadius() float64 {
 	case phaseLobby:
 		return arenaMax
 	}
-	// the pitch has walls, and in Hex Drop the floor goes tile by tile instead
-	if g.mode == modeBall || g.mode == modeTiles {
+	// the pitch has walls, in Hex Drop the floor goes tile by tile, and the mountain is its own course
+	if g.mode == modeBall || g.mode == modeTiles || g.mode == modeClimb {
 		return arenaMax
 	}
 	elapsed := g.cfg.RoundTime - g.phaseT
@@ -281,6 +291,13 @@ func (g *Game) arenaRadius() float64 {
 }
 
 func (g *Game) respawn(p *Player) {
+	defer g.resetForSpawn(p)
+	p.GroundY = 0
+	if g.mode == modeClimb && g.phase == phasePlay {
+		// back to the last landing reached
+		g.placeOnCourse(p, p.Check)
+		return
+	}
 	r := g.arenaRadius()
 	best, bestDist := [2]float64{}, -1.0
 	// pick the candidate spot farthest from everyone so nobody spawns inside a fight
@@ -306,15 +323,20 @@ func (g *Game) respawn(p *Player) {
 		}
 	}
 	p.X, p.Z, p.Y = best[0], best[1], 0
+	p.Angle = math.Atan2(-p.X, -p.Z)
+}
+
+// resetForSpawn clears everything a fresh blob shouldn't carry over, wherever it spawned
+func (g *Game) resetForSpawn(p *Player) {
+	p.Y = 0
 	p.VX, p.VZ, p.VY = 0, 0, 0
 	p.Falling, p.FallT = false, 0
 	p.Ghost = ghostTime
 	p.DashCD, p.DashT = 0, 0
 	p.Charging, p.ChargeT = false, 0
 	p.Pow, p.PowT, p.PoundT = powNone, 0, 0
-	p.Airborne, p.JumpCD, p.SweepCD, p.Stun = false, 0, 0, 0
+	p.Airborne, p.JumpCD, p.SweepCD, p.Stun, p.ArmCD = false, 0, 0, 0, 0
 	p.LastHitBy = 0
-	p.Angle = math.Atan2(-p.X, -p.Z)
 }
 
 // ==== simulation ====
@@ -380,17 +402,21 @@ func (g *Game) step(dt float64) {
 	g.updateCoins(dt)
 	g.updateBall(dt)
 	g.updateTiles(dt)
+	g.updateClimb(dt)
 
 	for _, p := range g.players {
 		// jumps and ground pounds are airborne, so leaving the island only counts once they land
 		// the pitch has walls, and in Hex Drop the tiles decide who falls
-		if g.mode != modeBall && g.mode != modeTiles && !p.Falling && p.PoundT == 0 && !p.Airborne && math.Hypot(p.X, p.Z) > g.radius {
+		if g.mode != modeBall && g.mode != modeTiles && g.mode != modeClimb && !p.Falling && p.PoundT == 0 && !p.Airborne && math.Hypot(p.X, p.Z) > g.radius {
 			g.knockOut(p)
 		}
 	}
 	g.updateCrown()
 	for _, p := range g.players {
 		p.AckTicks++
+	}
+	if g.phase == phasePlay && g.mode == modeClimb && (g.climbDone || g.allOut()) {
+		g.endRound()
 	}
 	if g.phase == phasePlay && (g.mode == modeLast || g.mode == modeTiles) && g.lastStandingDone() {
 		g.endRound()
@@ -418,7 +444,7 @@ func (g *Game) collide() {
 	for i := 0; i < len(list); i++ {
 		for j := i + 1; j < len(list); j++ {
 			a, b := list[i], list[j]
-			if math.Abs(a.Y-b.Y) > 1 {
+			if math.Abs(a.Y+a.GroundY-b.Y-b.GroundY) > 1 {
 				continue
 			}
 			dx, dz := b.X-a.X, b.Z-a.Z
@@ -571,6 +597,13 @@ func (g *Game) thinkBots(dt float64) {
 		b.think = 0.15 + rand.Float64()*0.2
 
 		// dashing at people would mostly launch a bot into a hole, so in Hex Drop they just keep moving
+		if g.mode == modeClimb && g.phase == phasePlay {
+			dx, dz := g.botClimbInput(b)
+			if l := math.Hypot(dx, dz); l > 0 {
+				b.InX, b.InZ = dx/l, dz/l
+			}
+			continue
+		}
 		if g.mode == modeTiles && g.phase == phasePlay {
 			g.botTiles(b)
 			// the floor changes fast, so look again sooner
@@ -895,7 +928,7 @@ func (g *Game) snapshot() []byte {
 			cd = p.DashCD / p.DashCDMax
 		}
 		ps = append(ps, [12]float64{
-			float64(p.ID), r2(p.X), r2(p.Z), r2(p.Y), r2(p.Angle),
+			float64(p.ID), r2(p.X), r2(p.Z), r2(p.Y + p.GroundY), r2(p.Angle),
 			float64(flags), r2(cd), float64(p.Score), r2(p.ChargeT / chargeMax), r2(p.PowT),
 			float64(p.Wins), float64(p.Team),
 		})
@@ -919,6 +952,9 @@ func (g *Game) snapshot() []byte {
 	}
 	if g.mode == modeTiles && g.phase == phasePlay {
 		msg["hx"] = g.tileState()
+	}
+	if g.mode == modeClimb && g.phase != phaseLobby {
+		msg["cr"] = g.climbState()
 	}
 	if g.sweepOn {
 		msg["sw"] = [2]float64{r2(g.sweepA), r2(g.sweepHalf())}
@@ -963,4 +999,14 @@ func mustJSON(v any) []byte {
 		panic(err)
 	}
 	return b
+}
+
+// allOut is true once nobody is left in the round
+func (g *Game) allOut() bool {
+	for _, p := range g.players {
+		if !p.Out {
+			return false
+		}
+	}
+	return len(g.players) > 0
 }
