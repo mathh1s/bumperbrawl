@@ -85,9 +85,13 @@ type Player struct {
 	Elim       bool // knocked out of a knockout match
 	OutAt      float64
 	Team       int
-	Stun       float64
-	Falling    bool
-	FallT      float64
+
+	Key          string // hashed profile key, public room only
+	Rating       float64
+	RoundsPlayed int
+	Stun         float64
+	Falling      bool
+	FallT        float64
 
 	LastHitBy int
 	LastHitT  float64
@@ -149,6 +153,8 @@ type Game struct {
 
 	ball      Ball
 	teamGoals [3]int
+
+	store *Store // ratings, public room only
 }
 
 func NewGame(code string, cfg Config) *Game {
@@ -227,7 +233,13 @@ func (g *Game) endRound() {
 		ev["s"] = winners[0].Score
 	}
 	g.phaseT = intermission
+	for _, p := range g.players {
+		if !p.Elim {
+			p.RoundsPlayed++
+		}
+	}
 	if g.matchOver() {
+		g.rateMatch()
 		g.phaseT = matchIntermission
 		ev["ch"] = names(g.champions())
 		ev["top"] = g.matchPodium()
@@ -671,6 +683,7 @@ type inMsg struct {
 	X float64 `json:"x"`
 	Z float64 `json:"z"`
 	S int64   `json:"s"`
+	K string  `json:"k"`
 	V bool    `json:"v"`
 	I int     `json:"i"`
 
@@ -701,6 +714,12 @@ func (g *Game) handle(c *Client, m inMsg) {
 			hat = 0
 		}
 		c.player = g.newPlayer(cleanName(m.N), color, hat, false)
+		if g.store != nil && !g.private {
+			c.player.Key, c.player.Rating = "", 0
+			if id, prof := g.store.lookup(m.K, c.player.Name); id != "" {
+				c.player.Key, c.player.Rating = id, prof.Rating
+			}
+		}
 		g.syncBots()
 		g.queue(c, mustJSON(map[string]any{
 			"t": "welcome", "id": c.player.ID, "room": g.code, "private": g.private,
@@ -781,7 +800,11 @@ func (g *Game) broadcast(msg []byte) {
 func (g *Game) rosterMsg() []byte {
 	list := make([]map[string]any, 0, len(g.players))
 	for _, p := range g.players {
-		list = append(list, map[string]any{"i": p.ID, "n": p.Name, "c": p.Color, "h": p.Hat, "b": p.Bot})
+		entry := map[string]any{"i": p.ID, "n": p.Name, "c": p.Color, "h": p.Hat, "b": p.Bot}
+		if p.Key != "" {
+			entry["r"] = int(p.Rating + 0.5)
+		}
+		list = append(list, entry)
 	}
 	return mustJSON(map[string]any{"t": "roster", "p": list})
 }

@@ -35,17 +35,22 @@ type Lobby struct {
 	mu    sync.Mutex
 	rooms map[string]*room
 	cfg   Config
+	store *Store
 }
 
-func NewLobby(cfg Config) *Lobby {
-	l := &Lobby{rooms: map[string]*room{}, cfg: cfg}
+func NewLobby(cfg Config, store *Store) *Lobby {
+	l := &Lobby{rooms: map[string]*room{}, cfg: cfg, store: store}
 	l.rooms[""] = l.start("")
 	go l.reap()
 	return l
 }
 
 func (l *Lobby) start(code string) *room {
-	r := &room{game: NewGame(code, l.cfg), stop: make(chan struct{})}
+	g := NewGame(code, l.cfg)
+	if code == "" {
+		g.store = l.store
+	}
+	r := &room{game: g, stop: make(chan struct{})}
 	go r.game.run(r.stop)
 	return r
 }

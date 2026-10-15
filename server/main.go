@@ -36,7 +36,11 @@ func main() {
 		origins = strings.Split(o, ",")
 	}
 
-	lobby := NewLobby(Config{MinPlayers: minPlayers, RoundTime: roundSeconds, MatchRounds: matchRounds})
+	store, err := OpenStore(env("DATA_DIR", ""))
+	if err != nil {
+		log.Fatalf("loading profiles: %v", err)
+	}
+	lobby := NewLobby(Config{MinPlayers: minPlayers, RoundTime: roundSeconds, MatchRounds: matchRounds}, store)
 
 	mux := http.NewServeMux()
 	mux.Handle("/", http.FileServer(http.Dir(webDir)))
@@ -53,6 +57,24 @@ func main() {
 		}
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(info)
+	})
+	mux.HandleFunc("GET /api/leaderboard", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"top": store.leaderboard()})
+	})
+	// the key goes in the body rather than the URL so it doesn't end up in proxy logs
+	mux.HandleFunc("POST /api/me", func(w http.ResponseWriter, r *http.Request) {
+		var body struct {
+			K string `json:"k"`
+		}
+		json.NewDecoder(http.MaxBytesReader(w, r.Body, 1024)).Decode(&body)
+		w.Header().Set("Content-Type", "application/json")
+		prof, pos, ok := store.rank(body.K)
+		if !ok {
+			json.NewEncoder(w).Encode(map[string]any{"rated": false})
+			return
+		}
+		json.NewEncoder(w).Encode(map[string]any{"rated": true, "r": int(prof.Rating + 0.5), "m": prof.Matches, "w": prof.Wins, "pos": pos})
 	})
 	mux.HandleFunc("/ws", func(w http.ResponseWriter, r *http.Request) { lobby.serveWS(w, r, origins) })
 

@@ -37,7 +37,7 @@ func (g *Game) newMatch() {
 	}
 	g.modeOrder = g.modeOrder[:g.cfg.MatchRounds]
 	for _, p := range g.players {
-		p.Wins, p.MatchPts, p.Elim = 0, 0, false
+		p.Wins, p.MatchPts, p.Elim, p.RoundsPlayed = 0, 0, false, 0
 	}
 	g.final, g.qualify, g.koDone = false, 0, false
 }

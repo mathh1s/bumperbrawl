@@ -14,6 +14,7 @@ A small online 3D party brawler. Everyone is a squishy blob on a floating hex is
   - Blob Ball: two teams and a big ball, bonk it into the other team's goal (the island doesn't crumble and a fence keeps the ball in)
 - Hold dash to charge a stronger launch; tap for a quick one
 - Power-up crates: heavy, bouncy and ground pound
+- Rated public matches: each browser gets a random key (no account, no password), and finishing a public match moves your rating like chess Elo against everyone you finished above or below, bots counting as 1000. Tiers show next to names and the menu has a leaderboard. Private rooms are never rated
 - In the last 30 seconds a giant log sweeps the island; jump it or get swept away
 - The leader wears a crown worth 2 points to whoever knocks them off; rounds end on a podium
 - Private rooms: "Create a room" makes a room at `/?room=CODE` to share, and friends can type the code (or paste the link) into the menu to join. The menu shows who is already in a room before you join. It opens in a lobby that lists who joined and who is ready; the host (first one in) picks rounds, round length, bots and modes, and the match starts when everyone is ready or the host starts it. Private rooms can also play a Knockout match: after each round only the best 60% go through, the eliminated watch, and the last three or fewer play a Last Blob Standing final. After the match the room goes back to the lobby. The host can remove players. Empty rooms close after a minute
@@ -46,6 +47,7 @@ Then open http://localhost:8080. `PORT` changes the listen port.
 | `MATCH_ROUNDS`    | 5       | Rounds per match                                               |
 | `ALLOWED_ORIGINS` | empty   | Extra allowed WebSocket origins; same-origin always works      |
 | `WEB_DIR`         | auto    | Static files directory                                         |
+| `DATA_DIR`        | empty   | Where ratings are saved (`profiles.json`); empty keeps them in memory only. The Docker image uses `/data`, a named volume in `compose.yaml` |
 
 ## Reverse proxy
 
@@ -83,12 +85,14 @@ This rewrites the mp3 files and `web/music/tracks.json` (loop points). The sound
 server/  game.go   simulation, rounds, bots, snapshots
          movement.go  steering, dashes, knockback control (mirrored in web/predict.js)
          room.go      private room lobby: host, ready checks, settings
+         profiles.go  ratings, profile file, leaderboard
          knockout.go  knockout match format
          mode_ball.go Blob Ball: teams, ball physics, goals, bot play
          main.go   http server, websocket handling, game loop
 web/     main.js   netcode, interpolation, camera, HUD
          predict.js  client-side prediction of your own blob
          lobby.js    private room lobby panel
+         rank.js     rating tiers and the per-browser player key
          ball.js     Blob Ball ball, goals and fence
          world.js  sky, water, crumbling island, scenery
          blobs.js    player characters and hats

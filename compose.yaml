@@ -10,3 +10,9 @@ services:
       ROUND_SECONDS: ${ROUND_SECONDS:-120}
       MATCH_ROUNDS: ${MATCH_ROUNDS:-5}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-}
+    volumes:
+      # player ratings; a named volume starts out owned by the container user
+      - bumper-data:/data
+
+volumes:
+  bumper-data:

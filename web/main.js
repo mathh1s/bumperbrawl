@@ -16,6 +16,7 @@ import { Predictor } from './predict.js';
 import { Music } from './music.js';
 import { LobbyPanel } from './lobby.js';
 import { esc } from './text.js';
+import { tierBadge, tierOf, playerKey } from './rank.js';
 
 const INTERP_MS = 110;
 const ARENA_MAX = 15;
@@ -120,6 +121,12 @@ function onMessage(m) {
       }
       renderLobby();
       renderWho();
+      break;
+    }
+    case 'rank': {
+      const d = m.new - m.old;
+      const t = tierOf(m.new);
+      addFeed(`Rating <b>${m.new}</b> (${d >= 0 ? '+' : ''}${d})${tierOf(m.old) !== t ? ` · now <b>${t.name}</b>!` : ''}`);
       break;
     }
     case 'kicked':
@@ -510,7 +517,7 @@ function updateHud(dt, view) {
     const crown = id === latest.cw ? CROWN_SVG : '';
     const wins = p.wins ? `<span class="wins">★${p.wins}</span>` : '';
     return `<li class="${id === myId ? 'me' : ''}"><span class="dot" style="background:${PALETTE[r.c]}"></span>`
-      + `<span class="nm">${esc(r.n)}</span>${crown}${r.b ? '<span class="bot">bot</span>' : ''}${wins}`
+      + `<span class="nm">${esc(r.n)}</span>${r.r ? tierBadge(r.r) : ''}${crown}${r.b ? '<span class="bot">bot</span>' : ''}${wins}`
       + `<span class="sc">${p.flags & OUT ? '<span class="out">out</span>' : modeOf(latest.md).cell(p)}</span></li>`;
   }).join('');
 }
@@ -666,6 +673,7 @@ function flashInvite(text) {
 
 if (ROOM) {
   $('publicRooms').hidden = true;
+  $('ranks').hidden = true;
   $('roomInfo').hidden = false;
   $('leaveRoom').hidden = false;
   $('roomCode').textContent = ROOM;
@@ -726,6 +734,27 @@ $('codeInput').addEventListener('keydown', (e) => {
   }
 });
 
+// ==== leaderboard ====
+
+async function loadRanks() {
+  try {
+    const [top, me] = await Promise.all([
+      fetch('/api/leaderboard').then((res) => res.json()),
+      fetch('/api/me', { method: 'POST', body: JSON.stringify({ k: playerKey() }) }).then((res) => res.json()),
+    ]);
+    $('myRank').innerHTML = me.rated ? `· you: ${tierBadge(me.r)} ${me.r}, #${me.pos}` : '';
+    $('rankList').innerHTML = top.top.length
+      ? top.top.map((p, i) => `<li><span class="pos">${i + 1}</span><span class="nm">${esc(p.n)}</span>${tierBadge(p.r)}<span class="rt">${p.r}</span></li>`).join('')
+      : '<li class="empty">No rated matches yet. Play one!</li>';
+  } catch {
+    $('rankList').innerHTML = '<li class="empty">Could not load the leaderboard</li>';
+  }
+}
+$('ranks').addEventListener('toggle', () => {
+  if ($('ranks').open) loadRanks();
+});
+if (!ROOM) loadRanks();
+
 function backToMenu(reason) {
   joined = false;
   myId = null;
@@ -762,7 +791,7 @@ $('joinForm').addEventListener('submit', (e) => {
     localStorage.setItem('bb.color', String(chosenColor));
     localStorage.setItem('bb.hat', String(chosenHat));
   } catch { /* storage blocked, not important */ }
-  wantJoin = { t: 'join', n: name, c: chosenColor, h: chosenHat };
+  wantJoin = { t: 'join', n: name, c: chosenColor, h: chosenHat, k: playerKey() };
   send(wantJoin);
   $('name').blur();
 });
