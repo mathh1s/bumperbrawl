@@ -27,7 +27,7 @@ func TestMatchMovesRatings(t *testing.T) {
 	g, a, b := ratedGame(t, store)
 	// Ann takes both rounds
 	for range 2 {
-		a.player.Score = 3
+		a.player.Score, b.player.Score = 3, 0
 		g.endRound()
 		if !g.matchOver() {
 			g.startRound()
