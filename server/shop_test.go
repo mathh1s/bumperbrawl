@@ -48,7 +48,7 @@ func TestMatchesPayCrowns(t *testing.T) {
 	store, _ := OpenStore("")
 	g, a, b := ratedGame(t, store)
 	for r := 1; r <= g.cfg.MatchRounds; r++ {
-		a.player.Score = 3
+		a.player.Score, b.player.Score = 3, 0
 		g.endRound()
 		if r < g.cfg.MatchRounds {
 			g.startRound()
